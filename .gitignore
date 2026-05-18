@@ -1,0 +1,7 @@
+/.idea
+/api_rest_desk.egg-info
+/__pycache__
+*.pyc
+/dist
+*.json
+/build

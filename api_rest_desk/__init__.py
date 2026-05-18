@@ -1,0 +1,2 @@
+"""Desktop REST client package."""
+
