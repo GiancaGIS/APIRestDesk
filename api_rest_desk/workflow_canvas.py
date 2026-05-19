@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (
@@ -86,7 +88,17 @@ class WorkflowCanvasNode(QGraphicsObject):
             self.step.position_x = position.x()
             self.step.position_y = position.y()
             self.canvas.refresh_connections()
+            self.canvas.update_drop_candidate(self)
         return super().itemChange(change, value)
+
+    def mousePressEvent(self, event) -> None:
+        self.setCursor(Qt.CursorShape.ClosedHandCursor)
+        super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event) -> None:
+        super().mouseReleaseEvent(event)
+        self.setCursor(Qt.CursorShape.OpenHandCursor)
+        self.canvas.commit_drop_candidate(self)
 
     def set_status(self, status: int | None, network_error: bool = False) -> None:
         self.status = status
@@ -127,7 +139,8 @@ class WorkflowCanvas(QWidget):
         self.dark_mode = str(load_settings().get("theme") or "light") == "dark"
         self._steps: list[WorkflowStep] = []
         self.nodes: list[WorkflowCanvasNode] = []
-        self.connections: list[QGraphicsPathItem] = []
+        self.connections: list[dict] = []
+        self.drop_candidate: tuple[int, int] | None = None
         self._updating_editor = False
 
         self._build_ui()
@@ -259,21 +272,91 @@ class WorkflowCanvas(QWidget):
 
     def refresh_connections(self) -> None:
         for connection in self.connections:
-            self.scene.removeItem(connection)
+            self.scene.removeItem(connection["item"])
         self.connections.clear()
 
-        pen = QPen(QColor("#60a5fa" if self.dark_mode else "#2e6ff2"), 2)
-        for left, right in zip(self.nodes, self.nodes[1:]):
+        default_pen = QPen(QColor("#60a5fa" if self.dark_mode else "#2e6ff2"), 2)
+        highlight_pen = QPen(QColor("#f59e0b"), 4)
+        for index, (left, right) in enumerate(zip(self.nodes, self.nodes[1:])):
             start = left.pos() + QPointF(WorkflowCanvasNode.WIDTH, WorkflowCanvasNode.HEIGHT / 2)
             end = right.pos() + QPointF(0, WorkflowCanvasNode.HEIGHT / 2)
             distance = max(80, abs(end.x() - start.x()) / 2)
             path = QPainterPath(start)
             path.cubicTo(start + QPointF(distance, 0), end - QPointF(distance, 0), end)
             connection = QGraphicsPathItem(path)
-            connection.setPen(pen)
+            connection.setPen(highlight_pen if self.drop_candidate == (index, index + 1) else default_pen)
             connection.setZValue(-1)
             self.scene.addItem(connection)
-            self.connections.append(connection)
+            self.connections.append(
+                {
+                    "item": connection,
+                    "left_index": index,
+                    "right_index": index + 1,
+                    "start": start,
+                    "end": end,
+                }
+            )
+
+    def update_drop_candidate(self, node: WorkflowCanvasNode) -> None:
+        if node not in self.nodes or len(self.nodes) < 3:
+            self._set_drop_candidate(None)
+            return
+
+        node_index = self.nodes.index(node)
+        node_center = node.pos() + QPointF(WorkflowCanvasNode.WIDTH / 2, WorkflowCanvasNode.HEIGHT / 2)
+        best_pair: tuple[int, int] | None = None
+        best_distance = 90.0
+
+        for connection in self.connections:
+            left_index = int(connection["left_index"])
+            right_index = int(connection["right_index"])
+            if node_index in {left_index, right_index}:
+                continue
+
+            distance = self._distance_to_segment(node_center, connection["start"], connection["end"])
+            if distance < best_distance:
+                best_pair = (left_index, right_index)
+                best_distance = distance
+
+        self._set_drop_candidate(best_pair)
+
+    def commit_drop_candidate(self, node: WorkflowCanvasNode) -> None:
+        if self.drop_candidate is None or node not in self.nodes:
+            self._set_drop_candidate(None)
+            return
+
+        old_index = self.nodes.index(node)
+        left_index, _right_index = self.drop_candidate
+        step = self._steps.pop(old_index)
+        target_index = left_index + 1
+        if old_index < target_index:
+            target_index -= 1
+        self._steps.insert(target_index, step)
+        step.position_x = node.pos().x()
+        step.position_y = node.pos().y()
+        self.drop_candidate = None
+        self._rebuild_scene(select_index=target_index)
+
+    def _set_drop_candidate(self, candidate: tuple[int, int] | None) -> None:
+        if candidate == self.drop_candidate:
+            return
+        self.drop_candidate = candidate
+        self.refresh_connections()
+
+    @staticmethod
+    def _distance_to_segment(point: QPointF, start: QPointF, end: QPointF) -> float:
+        segment_x = end.x() - start.x()
+        segment_y = end.y() - start.y()
+        length_squared = (segment_x * segment_x) + (segment_y * segment_y)
+        if length_squared == 0:
+            return math.hypot(point.x() - start.x(), point.y() - start.y())
+
+        projection = (
+            ((point.x() - start.x()) * segment_x) + ((point.y() - start.y()) * segment_y)
+        ) / length_squared
+        projection = max(0.0, min(1.0, projection))
+        closest = QPointF(start.x() + projection * segment_x, start.y() + projection * segment_y)
+        return math.hypot(point.x() - closest.x(), point.y() - closest.y())
 
     def call_label(self, call_id: str) -> str:
         call = next((item for item in self.calls if item.id == call_id), None)
@@ -285,6 +368,7 @@ class WorkflowCanvas(QWidget):
         self.scene.clear()
         self.nodes.clear()
         self.connections.clear()
+        self.drop_candidate = None
         self._apply_scene_colors()
 
         for index, step in enumerate(self._steps):

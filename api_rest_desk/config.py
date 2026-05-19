@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-APP_NAME = "APIRestDesk"
+APP_NAME = "APIRestDesk 🚀"
 APP_VERSION = "1.0.0"
 COLLECTION_FILE = ROOT_DIR / "rest_client_collection.json"
 FOLDERS_FILE = ROOT_DIR / "rest_client_folders.json"
