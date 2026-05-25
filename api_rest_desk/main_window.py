@@ -312,12 +312,9 @@ class RestClientWindow(QMainWindow):
         self.response_search.returnPressed.connect(self._find_in_response)
         self.copy_response_button = QPushButton()
         self.save_response_button = QPushButton()
-        self.copy_json_path_button = QPushButton()
         self.copy_response_button.clicked.connect(self._copy_response_body)
         self.save_response_button.clicked.connect(self._save_response_body)
-        self.copy_json_path_button.clicked.connect(self._copy_selected_json_path)
         response_top.addWidget(self.response_search)
-        response_top.addWidget(self.copy_json_path_button)
         response_top.addWidget(self.copy_response_button)
         response_top.addWidget(self.save_response_button)
         response_card_layout.addLayout(response_top)
@@ -497,7 +494,6 @@ class RestClientWindow(QMainWindow):
         self.body_type_combo.setItemText(2, self.t("form_urlencoded"))
         self.response_title.setText(self.t("response"))
         self.response_search.setPlaceholderText(self.t("find"))
-        self.copy_json_path_button.setText(self.t("copy_path"))
         self.copy_response_button.setText(self.t("copy"))
         self.save_response_button.setText(self.t("save_response"))
         self.status_label.setText(self.t("status"))
@@ -1564,16 +1560,6 @@ class RestClientWindow(QMainWindow):
         with open(path, "w", encoding="utf-8") as file:
             file.write(self.response_raw.toPlainText() or self.response_body.toPlainText())
         self._show_toast(self.t("save_response"), "success")
-
-    def _copy_selected_json_path(self) -> None:
-        item = self.response_json_tree.currentItem()
-        if item is None:
-            return
-        path = str(item.data(0, Qt.ItemDataRole.UserRole) or "")
-        if not path:
-            return
-        QApplication.clipboard().setText(path)
-        self._show_toast(self.t("copy_path"), "success")
 
     def _populate_json_tree(self, body: str) -> None:
         self.response_json_tree.clear()
