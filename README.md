@@ -47,7 +47,6 @@ The workflow composer chains saved REST calls. Each step executes a saved reques
 Available workflow modes:
 
 - **Linear**: table-based step editor.
-- **Vertical blocks**: one card per step, arranged top-to-bottom.
 - **Visual canvas**: draggable nodes with connections.
 
 The workflow window can be maximized. The result area has a vertical splitter, so the lower output panel can be resized. After a workflow run, APIRestDesk shows:
