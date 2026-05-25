@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from api_rest_desk.exceptions import set_error_language
 from api_rest_desk.settings import load_settings, update_setting
 
 
@@ -96,11 +97,14 @@ TRANSLATIONS = {
         "invalid_extractors_title": "Estrazioni non valide",
         "workflow_empty_message": "Aggiungi almeno uno step.",
         "workflow_completed": "Workflow completato",
+        "workflow_completed_with_errors": "Workflow interrotto: controlla l'output dello step",
         "workflow_failed": "Workflow fallito",
         "add": "Aggiungi",
         "remove": "Rimuovi",
         "value": "Valore",
         "settings": "Impostazioni",
+        "environment_variables": "Variabili ambiente",
+        "variable": "Variabile",
         "about": "Informazioni",
         "about_app": "Info",
         "version": "Versione",
@@ -112,7 +116,6 @@ TRANSLATIONS = {
         "stacked": "Impilato",
         "search": "Cerca",
         "format_json": "Formatta JSON",
-        "validate_json": "Valida JSON",
         "json_valid": "JSON valido",
         "json_invalid": "JSON non valido",
         "pretty": "Pretty",
@@ -120,16 +123,51 @@ TRANSLATIONS = {
         "form_urlencoded": "Form URL Encoded",
         "copy": "Copia",
         "save_response": "Salva risposta",
+        "json_tree": "Albero JSON",
+        "copy_path": "Copia path",
+        "sync_params": "Params da URL",
+        "request_options": "Opzioni",
+        "timeout": "Timeout",
+        "follow_redirects": "Redirect",
+        "retry_count": "Retry",
+        "retry_statuses": "Status retry",
+        "use_session_cookies": "Usa cookie di sessione",
+        "session_cookies": "Cookie sessione",
+        "clear_session_cookies": "Svuota cookie sessione",
+        "session_cookies_cleared": "Cookie sessione svuotati",
+        "tests": "Tests",
+        "assertions_placeholder": "status == 200\njson token exists\ntime < 1000\nheader Content-Type contains json",
+        "tests_not_configured": "Nessun test configurato.",
+        "tests_failed": "Risposta ricevuta, ma alcuni test sono falliti",
+        "assertion_unknown": "Assertion non riconosciuta",
+        "import_workspace": "Importa workspace",
+        "export_workspace": "Esporta workspace",
+        "workspace_imported": "Workspace importato",
+        "workspace_exported": "Workspace esportato",
+        "workspace_import_error": "Import workspace non valido",
+        "import_openapi": "Importa OpenAPI",
+        "openapi_import_error": "OpenAPI non valido",
+        "openapi_no_operations": "Nessuna operazione importabile trovata.",
+        "openapi_imported": "{count} chiamate importate da OpenAPI",
+        "import_curl": "Importa cURL",
+        "copy_curl": "Copia cURL",
+        "curl_import_title": "Importa cURL",
+        "curl_import_label": "Incolla qui il comando cURL",
+        "curl_import_error": "cURL non valido",
+        "curl_imported": "cURL importato",
+        "curl_copied": "cURL copiato negli appunti",
         "find": "Trova",
         "settings_saved": "Impostazioni salvate",
         "workflow_mode": "Modalita",
         "workflow_mode_linear": "Lineare",
-        "workflow_mode_blocks": "Blocchi verticali",
         "workflow_mode_canvas": "Canvas visuale",
-        "workflow_mode_blocks_info": "Modalita a blocchi verticali: ogni card e uno step eseguibile. Usa {{variabile}} nelle chiamate successive e definisci estrazioni come token=token.",
+        "workflow_auto_params": "Ricava automaticamente i parametri dalle response precedenti",
+        "workflow_auto_params_tooltip": "Riempie i parametri vuoti degli step successivi usando campi JSON con nome uguale o simile.",
         "workflow_mode_canvas_info": "Canvas visuale: i nodi rappresentano gli step della catena, sono trascinabili e vengono eseguiti nell'ordine delle connessioni. Rilascia un nodo su una connessione evidenziata per inserirlo in mezzo.",
         "workflow_mode_not_runnable": "Questa modalita non e ancora eseguibile.",
         "workflow_canvas_node_details": "Dettaglio nodo",
+        "canvas_home": "Home",
+        "canvas_home_tooltip": "Centra e adatta lo zoom a tutti i nodi",
     },
     "en": {
         "rest_workspace": "REST workspace",
@@ -217,11 +255,14 @@ TRANSLATIONS = {
         "invalid_extractors_title": "Invalid extractors",
         "workflow_empty_message": "Add at least one step.",
         "workflow_completed": "Workflow completed",
+        "workflow_completed_with_errors": "Workflow stopped: check the step output",
         "workflow_failed": "Workflow failed",
         "add": "Add",
         "remove": "Remove",
         "value": "Value",
         "settings": "Settings",
+        "environment_variables": "Environment variables",
+        "variable": "Variable",
         "about": "About",
         "about_app": "About APIRestDesk",
         "version": "Version",
@@ -233,7 +274,6 @@ TRANSLATIONS = {
         "stacked": "Stacked",
         "search": "Search",
         "format_json": "Format JSON",
-        "validate_json": "Validate JSON",
         "json_valid": "Valid JSON",
         "json_invalid": "Invalid JSON",
         "pretty": "Pretty",
@@ -241,40 +281,96 @@ TRANSLATIONS = {
         "form_urlencoded": "Form URL Encoded",
         "copy": "Copy",
         "save_response": "Save response",
+        "json_tree": "JSON tree",
+        "copy_path": "Copy path",
+        "sync_params": "Params from URL",
+        "request_options": "Options",
+        "timeout": "Timeout",
+        "follow_redirects": "Redirects",
+        "retry_count": "Retries",
+        "retry_statuses": "Retry statuses",
+        "use_session_cookies": "Use session cookies",
+        "session_cookies": "Session cookies",
+        "clear_session_cookies": "Clear session cookies",
+        "session_cookies_cleared": "Session cookies cleared",
+        "tests": "Tests",
+        "assertions_placeholder": "status == 200\njson token exists\ntime < 1000\nheader Content-Type contains json",
+        "tests_not_configured": "No tests configured.",
+        "tests_failed": "Response received, but some tests failed",
+        "assertion_unknown": "Unknown assertion",
+        "import_workspace": "Import workspace",
+        "export_workspace": "Export workspace",
+        "workspace_imported": "Workspace imported",
+        "workspace_exported": "Workspace exported",
+        "workspace_import_error": "Invalid workspace import",
+        "import_openapi": "Import OpenAPI",
+        "openapi_import_error": "Invalid OpenAPI",
+        "openapi_no_operations": "No importable operation found.",
+        "openapi_imported": "{count} requests imported from OpenAPI",
+        "import_curl": "Import cURL",
+        "copy_curl": "Copy cURL",
+        "curl_import_title": "Import cURL",
+        "curl_import_label": "Paste the cURL command here",
+        "curl_import_error": "Invalid cURL",
+        "curl_imported": "cURL imported",
+        "curl_copied": "cURL copied to clipboard",
         "find": "Find",
         "settings_saved": "Settings saved",
         "workflow_mode": "Mode",
         "workflow_mode_linear": "Linear",
-        "workflow_mode_blocks": "Vertical blocks",
         "workflow_mode_canvas": "Visual canvas",
-        "workflow_mode_blocks_info": "Vertical blocks mode: each card is a runnable step. Use {{variable}} in following requests and define extractors like token=token.",
+        "workflow_auto_params": "Automatically derive params from previous responses",
+        "workflow_auto_params_tooltip": "Fills blank params in following steps using JSON fields with the same or similar name.",
         "workflow_mode_canvas_info": "Visual canvas: nodes represent chain steps, can be dragged, and run in connection order. Drop a node on a highlighted connection to insert it between two steps.",
         "workflow_mode_not_runnable": "This mode is not runnable yet.",
         "workflow_canvas_node_details": "Node details",
+        "canvas_home": "Home",
+        "canvas_home_tooltip": "Fit and center all nodes in view",
     },
 }
 
 
 def load_language() -> str:
+    """Read the active language code from settings, defaulting to ``"it"``."""
     data = load_settings()
     language = str(data.get("language") or "it")
     return language if language in SUPPORTED_LANGUAGES else "it"
 
 
 def save_language(language: str) -> None:
+    """Persist the selected language to settings."""
     update_setting("language", language)
 
 
 class Translator:
+    """Provides localized string lookups via translation keys.
+
+    The active language is synchronized with the exception message
+    system so that error messages always match the UI language.
+    """
+
     def __init__(self, language: str | None = None) -> None:
         self.language = language or load_language()
+        set_error_language(self.language)
 
     def set_language(self, language: str) -> None:
+        """Switch the active language and persist the choice.
+
+        Also updates the exception message language via
+        :func:`set_error_language`.  Ignored when *language* is not
+        in ``SUPPORTED_LANGUAGES``.
+        """
         if language not in SUPPORTED_LANGUAGES:
             return
         self.language = language
+        set_error_language(language)
         save_language(language)
 
     def t(self, key: str, **kwargs: object) -> str:
+        """Translate *key* into the active language.
+
+        Supports ``str.format``-style placeholders via ``**kwargs``.
+        Returns the key itself when no translation is found.
+        """
         text = TRANSLATIONS.get(self.language, TRANSLATIONS["it"]).get(key, key)
         return text.format(**kwargs) if kwargs else text

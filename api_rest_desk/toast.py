@@ -5,6 +5,10 @@ from PyQt6.QtWidgets import QGraphicsOpacityEffect, QLabel, QWidget
 
 
 class ToastNotification(QLabel):
+    """Small notification label that slides in from the top-right corner,
+    stays visible briefly, and fades out automatically.
+    """
+
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
         self.setObjectName("Toast")
@@ -22,6 +26,12 @@ class ToastNotification(QLabel):
         self.hide()
 
     def show_message(self, text: str, kind: str = "info", duration_ms: int = 3200) -> None:
+        """Display a toast message with the given *kind*
+        (``"success"``, ``"warning"``, ``"error"``, or ``"info"``).
+
+        The toast slides in, stays for *duration_ms* milliseconds,
+        and then fades out.
+        """
         self.hide_timer.stop()
         self._stop_animation()
         self.setText(text)

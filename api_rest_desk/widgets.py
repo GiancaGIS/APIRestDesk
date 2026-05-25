@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from api_rest_desk.exceptions import HeaderParseError
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -22,6 +24,10 @@ from api_rest_desk.models import RestCall
 
 
 class HeaderEditor(QWidget):
+    """Table-based editor for HTTP request headers with auto-complete
+    on common header names.
+    """
+
     def __init__(self) -> None:
         super().__init__()
         self.translator = Translator()
@@ -63,6 +69,7 @@ class HeaderEditor(QWidget):
                 value_widget.setPlaceholderText(translator.t("value"))
 
     def set_headers(self, headers: dict[str, str]) -> None:
+        """Replace the table contents with the given header dictionary."""
         self.table.setRowCount(0)
         for name, value in headers.items():
             self.add_row(name, value)
@@ -70,6 +77,11 @@ class HeaderEditor(QWidget):
             self.add_row()
 
     def headers(self) -> dict[str, str]:
+        """Read all header rows from the table and return them as a dictionary.
+
+        Raises:
+            HeaderParseError: When a row has a value but no header name.
+        """
         parsed: dict[str, str] = {}
         for row in range(self.table.rowCount()):
             name_widget = self.table.cellWidget(row, 0)
@@ -82,12 +94,13 @@ class HeaderEditor(QWidget):
             if not name and not value:
                 continue
             if not name:
-                raise ValueError(f"Riga {row + 1}: seleziona o scrivi il nome dell'header.")
+                raise HeaderParseError("header_missing_name", row=row + 1)
 
             parsed[name] = value
         return parsed
 
     def add_row(self, name: str = "", value: str = "") -> None:
+        """Append a new header row to the table."""
         row = self.table.rowCount()
         self.table.insertRow(row)
 
@@ -108,6 +121,7 @@ class HeaderEditor(QWidget):
         self.table.setCellWidget(row, 1, value_input)
 
     def remove_selected_rows(self) -> None:
+        """Remove the currently selected rows, or the last row if none is selected."""
         selected_rows = sorted({index.row() for index in self.table.selectedIndexes()}, reverse=True)
         if not selected_rows:
             selected_rows = [self.table.rowCount() - 1]
@@ -121,6 +135,10 @@ class HeaderEditor(QWidget):
 
 
 class KeyValueEditor(QWidget):
+    """Generic two-column table editor for key-value pairs
+    (used for query params and form body fields).
+    """
+
     def __init__(self, key_label: str = "Key", value_label: str = "Value") -> None:
         super().__init__()
         self.translator = Translator()
@@ -166,6 +184,7 @@ class KeyValueEditor(QWidget):
                 value_widget.setPlaceholderText(self.value_label)
 
     def set_values(self, values: dict[str, str]) -> None:
+        """Replace the table contents with the given key-value dictionary."""
         self.table.setRowCount(0)
         for key, value in values.items():
             self.add_row(key, value)
@@ -173,6 +192,7 @@ class KeyValueEditor(QWidget):
             self.add_row()
 
     def values(self) -> dict[str, str]:
+        """Read all key-value rows from the table and return them as a dictionary."""
         parsed: dict[str, str] = {}
         for row in range(self.table.rowCount()):
             key_widget = self.table.cellWidget(row, 0)
@@ -216,6 +236,10 @@ class KeyValueEditor(QWidget):
 
 
 class AuthEditor(QWidget):
+    """Stacked widget that provides input forms for different
+    authentication methods: None, Basic, Bearer, and API Key.
+    """
+
     def __init__(self) -> None:
         super().__init__()
         self.translator = Translator()
@@ -310,6 +334,9 @@ class AuthEditor(QWidget):
         self._sync_auth_view()
 
     def set_auth(self, call: RestCall | None) -> None:
+        """Populate the auth fields from a :class:`RestCall`,
+        or clear all fields when *call* is ``None``.
+        """
         if call is None:
             auth_type = "none"
             self.username_input.clear()
@@ -332,6 +359,9 @@ class AuthEditor(QWidget):
         self.auth_type_combo.setCurrentIndex(type_index if type_index >= 0 else 0)
 
     def apply_to_call(self, call: RestCall) -> None:
+        """Write the current auth editor state back into *call*'s
+        authentication fields.
+        """
         call.auth_type = str(self.auth_type_combo.currentData() or "none")
         call.auth_username = self.username_input.text().strip()
         call.auth_password = self.password_input.text()

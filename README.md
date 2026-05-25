@@ -4,6 +4,16 @@ APIRestDesk is a PyQt6 desktop REST client for collecting, testing, saving, and 
 
 Current version: **1.0.0**
 
+## Screenshots
+
+### Main Window
+
+![APIRestDesk main window](images/main_window.png)
+
+### Workflow Composer
+
+![APIRestDesk workflow composer](images/workflow_window.png)
+
 ## Highlights
 
 - Local REST request collection organized in folders.
@@ -15,8 +25,15 @@ Current version: **1.0.0**
 - Auth modes: no auth, Basic Auth, Bearer Token, API Key in header or query string.
 - Query params editor with key/value rows.
 - Body modes: `Raw`, `JSON`, `Form URL Encoded`.
-- JSON formatting and validation.
-- Response viewer with `Pretty`, `Raw`, `Headers`, search, copy, and save.
+- Per-request options for timeout, redirect following, and HTTP status retries.
+- Optional session cookies shared across requests.
+- Response tests/assertions for status, time, headers, body text, and JSON paths.
+- Import OpenAPI JSON documents as request collections.
+- Import from cURL and copy the current request as cURL.
+- Workspace import/export including collection, folders, history, workflows, and settings.
+- Environment variables for reusable `{{variable}}` placeholders.
+- JSON formatting with built-in validation.
+- Response viewer with `Pretty`, `Raw`, `Headers`, JSON tree, tests, search, copy, and save.
 - Status badges and colors for HTTP results.
 - Toast notifications in the top-right corner.
 - Light and dark themes.
@@ -91,70 +108,11 @@ where=OBJECTID={{object_id}}
 
 Do not write `{{token}}` inside the `Extractors` field. Curly-brace variables are used only when consuming an extracted value in later steps.
 
-## ArcGIS Server Notes
+### Automatic Parameter Mapping
 
-APIRestDesk works well for ArcGIS REST endpoints.
+In a workflow, enable `Automatically derive params from previous responses` to fill blank query parameters in following steps from JSON fields returned by earlier steps. APIRestDesk first tries an exact name match, then a similarity score for common variants such as `userId`, `user_id`, and `user-id`.
 
-ArcGIS services usually need this parameter to return JSON:
-
-```text
-f=json
-```
-
-or:
-
-```text
-f=pjson
-```
-
-For `MapServer` or `FeatureServer` query operations, target the specific layer:
-
-```text
-.../MapServer/0/query
-.../FeatureServer/0/query
-```
-
-Example `GET`:
-
-```text
-https://server/arcgis/rest/services/ServiceName/MapServer/0/query?where=1%3D1&outFields=*&returnGeometry=true&f=json
-```
-
-Recommended ArcGIS `POST` setup:
-
-- method: `POST`
-- URL: `https://server/arcgis/rest/services/ServiceName/MapServer/0/query`
-- body type: `Form URL Encoded`
-- body table:
-
-```text
-where            1=1
-outFields        *
-returnGeometry   true
-f                json
-```
-
-Many ArcGIS REST endpoints do not interpret raw JSON bodies like this:
-
-```json
-{
-  "where": "1=1",
-  "outFields": "*",
-  "f": "json"
-}
-```
-
-Use `Form URL Encoded` instead. APIRestDesk sends:
-
-```text
-where=1%3D1&outFields=%2A&f=json
-```
-
-with:
-
-```text
-Content-Type: application/x-www-form-urlencoded
-```
+Automatic mapping does not overwrite non-empty parameter values. Manually configured extractors still have priority for explicit `{{variable}}` usage.
 
 ## Local Data Files
 
@@ -165,6 +123,7 @@ Data is stored as JSON files in the project root:
 - `rest_client_history.json`: request history.
 - `rest_client_workflows.json`: saved workflows.
 - `rest_client_settings.json`: language, theme, and settings.
+- `rest_client_cookies.json`: optional session cookie jar.
 
 The history limit is configured in `api_rest_desk/config.py`:
 
@@ -261,11 +220,28 @@ README.md                  Documentation
 ## Technical Notes
 
 - HTTP requests run in Qt worker threads.
-- History stores request headers, params, body, status, response headers, and response body.
+- History stores request headers, params, body, request options, assertions, status, response headers, and response body.
 - Auth credentials are stored in the local request collection.
 - History entries do not restore auth credentials, to avoid duplicating tokens/passwords.
+- Session cookies are stored only when a request has the session-cookie option enabled.
 - Workflows reference saved collection requests. If a request changes, workflow steps use the updated request.
 - The `{{variable}}` template is applied to URLs, headers, body, params, and auth fields.
 - Extractors read JSON responses with paths such as `token`, `data.access_token`, `features[0].attributes.OBJECTID`.
+- Retries are evaluated on configured HTTP statuses such as `429`, `500`, `502`, `503`, and `504`.
+- cURL import currently supports the common request options: URL, method, headers, raw data, Basic Auth, redirects, and timeout.
+- OpenAPI import currently supports JSON documents, OpenAPI 3 `servers`, Swagger 2 `host/basePath`, paths, methods, query/header parameters, and basic JSON/form request body examples.
 
----
+## Response Tests
+
+The request `Tests` tab supports one assertion per line:
+
+```text
+status == 200
+time < 1000
+body contains success
+header Content-Type contains json
+json token exists
+json data.items[0].id == 10
+```
+
+Assertions run after the response arrives. Results are shown in the response `Tests` tab and saved in history.

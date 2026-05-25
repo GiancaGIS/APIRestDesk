@@ -5,6 +5,7 @@ import json
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QComboBox,
+    QCheckBox,
     QDialog,
     QFrame,
     QHBoxLayout,
@@ -15,7 +16,6 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QPlainTextEdit,
-    QScrollArea,
     QSplitter,
     QStackedWidget,
     QTabWidget,
@@ -25,10 +25,11 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from api_rest_desk.exceptions import ExtractorParseError
 from api_rest_desk.models import RestCall, Workflow, WorkflowStep
 from api_rest_desk.storage import StorageError, load_workflows, save_workflows
 from api_rest_desk.i18n import Translator
-from api_rest_desk.theme import apply_theme, set_status_badge
+from api_rest_desk.theme import apply_theme
 from api_rest_desk.toast import ToastNotification
 from api_rest_desk.workflow import format_extractors, parse_extractors
 from api_rest_desk.workflow_canvas import WorkflowCanvas
@@ -53,7 +54,6 @@ class WorkflowDialog(QDialog):
         self.workflows = self._read_workflows()
         self.current_worker: WorkflowWorker | None = None
         self.toast: ToastNotification | None = None
-        self.block_cards: list[dict] = []
         self._active_mode = "linear"
 
         self._build_ui()
@@ -112,12 +112,14 @@ class WorkflowDialog(QDialog):
         self.mode_label = QLabel()
         self.mode_combo = QComboBox()
         self.mode_combo.addItem("", "linear")
-        self.mode_combo.addItem("", "blocks")
         self.mode_combo.addItem("", "canvas")
         self.mode_combo.currentIndexChanged.connect(self._handle_mode_changed)
         name_row.addWidget(self.mode_label)
         name_row.addWidget(self.mode_combo)
         right_layout.addLayout(name_row)
+
+        self.auto_params_checkbox = QCheckBox()
+        right_layout.addWidget(self.auto_params_checkbox)
 
         self.workflow_splitter = QSplitter(Qt.Orientation.Vertical)
         right_layout.addWidget(self.workflow_splitter, 1)
@@ -158,26 +160,6 @@ class WorkflowDialog(QDialog):
         step_buttons.addWidget(self.move_down_button)
         step_buttons.addStretch(1)
 
-        self.blocks_view = QWidget()
-        blocks_layout = QVBoxLayout(self.blocks_view)
-        blocks_layout.setContentsMargins(0, 0, 0, 0)
-        blocks_layout.setSpacing(10)
-        self.blocks_hint = QLabel()
-        self.blocks_hint.setObjectName("MutedLabel")
-        self.blocks_hint.setWordWrap(True)
-        blocks_layout.addWidget(self.blocks_hint)
-
-        self.blocks_scroll = QScrollArea()
-        self.blocks_scroll.setWidgetResizable(True)
-        self.blocks_scroll.setFrameShape(QFrame.Shape.NoFrame)
-        self.blocks_content = QWidget()
-        self.blocks_layout = QVBoxLayout(self.blocks_content)
-        self.blocks_layout.setContentsMargins(0, 0, 0, 0)
-        self.blocks_layout.setSpacing(10)
-        self.blocks_layout.addStretch(1)
-        self.blocks_scroll.setWidget(self.blocks_content)
-        blocks_layout.addWidget(self.blocks_scroll, 1)
-
         self.canvas_view = QWidget()
         canvas_layout = QVBoxLayout(self.canvas_view)
         canvas_layout.setContentsMargins(0, 0, 0, 0)
@@ -190,7 +172,6 @@ class WorkflowDialog(QDialog):
         canvas_layout.addWidget(self.workflow_canvas, 1)
 
         self.mode_stack.addWidget(self.linear_view)
-        self.mode_stack.addWidget(self.blocks_view)
         self.mode_stack.addWidget(self.canvas_view)
         editor_area_layout.addLayout(step_buttons)
 
@@ -207,6 +188,7 @@ class WorkflowDialog(QDialog):
         editor_area_layout.addLayout(action_buttons)
 
         result_area = QWidget()
+        result_area.setMinimumHeight(260)
         result_layout = QVBoxLayout(result_area)
         result_layout.setContentsMargins(0, 0, 0, 0)
         result_layout.setSpacing(8)
@@ -217,16 +199,19 @@ class WorkflowDialog(QDialog):
         result_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.output = QPlainTextEdit()
         self.output.setReadOnly(True)
+        self.output.setMinimumWidth(320)
         result_splitter.addWidget(self.output)
 
         step_output_area = QWidget()
+        step_output_area.setMinimumWidth(360)
         step_output_layout = QVBoxLayout(step_output_area)
         step_output_layout.setContentsMargins(0, 0, 0, 0)
         step_output_layout.setSpacing(8)
         self.step_outputs_title = QLabel()
         self.step_outputs_title.setObjectName("SectionTitle")
-        self.step_output_list = QListWidget()
-        self.step_output_list.currentRowChanged.connect(self._show_selected_step_output)
+        self.step_output_combo = QComboBox()
+        self.step_output_combo.setMinimumHeight(36)
+        self.step_output_combo.currentIndexChanged.connect(self._show_selected_step_output)
         self.step_output_tabs = QTabWidget()
         self.step_output_body = QPlainTextEdit()
         self.step_output_body.setReadOnly(True)
@@ -235,15 +220,15 @@ class WorkflowDialog(QDialog):
         self.step_output_tabs.addTab(self.step_output_body, "")
         self.step_output_tabs.addTab(self.step_output_headers, "")
         step_output_layout.addWidget(self.step_outputs_title)
-        step_output_layout.addWidget(self.step_output_list, 1)
-        step_output_layout.addWidget(self.step_output_tabs, 2)
+        step_output_layout.addWidget(self.step_output_combo)
+        step_output_layout.addWidget(self.step_output_tabs, 1)
         result_splitter.addWidget(step_output_area)
-        result_splitter.setSizes([430, 310])
+        result_splitter.setSizes([360, 420])
         result_layout.addWidget(result_splitter, 1)
 
         self.workflow_splitter.addWidget(editor_area)
         self.workflow_splitter.addWidget(result_area)
-        self.workflow_splitter.setSizes([430, 230])
+        self.workflow_splitter.setSizes([380, 280])
 
         splitter.addWidget(left)
         splitter.addWidget(right)
@@ -262,9 +247,9 @@ class WorkflowDialog(QDialog):
         self.name_input.setPlaceholderText(self.t("workflow_name_placeholder"))
         self.mode_label.setText(self.t("workflow_mode"))
         self.mode_combo.setItemText(0, self.t("workflow_mode_linear"))
-        self.mode_combo.setItemText(1, self.t("workflow_mode_blocks"))
-        self.mode_combo.setItemText(2, self.t("workflow_mode_canvas"))
-        self.blocks_hint.setText(self.t("workflow_mode_blocks_info"))
+        self.mode_combo.setItemText(1, self.t("workflow_mode_canvas"))
+        self.auto_params_checkbox.setText(self.t("workflow_auto_params"))
+        self.auto_params_checkbox.setToolTip(self.t("workflow_auto_params_tooltip"))
         self.canvas_hint.setText(self.t("workflow_mode_canvas_info"))
         self.workflow_canvas.retranslate_ui()
         self.steps_table.setHorizontalHeaderLabels(
@@ -310,14 +295,13 @@ class WorkflowDialog(QDialog):
             return
 
         self.name_input.setText(workflow.name)
+        self.auto_params_checkbox.setChecked(workflow.auto_map_params)
         index = self.mode_combo.findData(workflow.mode)
         self.mode_combo.setCurrentIndex(index if index >= 0 else 0)
         self.steps_table.setRowCount(0)
-        self._clear_block_cards()
         self.workflow_canvas.set_steps(workflow.steps)
         for step in workflow.steps:
             self._add_step_row(step)
-            self._add_block_card(step)
         self._sync_mode_view()
         self._active_mode = str(self.mode_combo.currentData() or "linear")
 
@@ -374,119 +358,12 @@ class WorkflowDialog(QDialog):
 
     def _add_step(self) -> None:
         mode = str(self.mode_combo.currentData() or "linear")
-        if mode == "blocks":
-            self._add_block_card()
-        elif mode == "canvas":
+        if mode == "canvas":
             self.workflow_canvas.add_step()
         elif mode == "linear":
             self._add_step_row()
 
-    def _add_block_card(self, step: WorkflowStep | None = None) -> None:
-        if not isinstance(step, WorkflowStep):
-            step = None
-
-        card = QFrame()
-        card.setObjectName("Metrics")
-        card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(12, 10, 12, 10)
-        card_layout.setSpacing(8)
-
-        header = QHBoxLayout()
-        number_label = QLabel()
-        number_label.setObjectName("MutedLabel")
-        status_label = QLabel()
-        status_label.setObjectName("StatusBadge")
-        set_status_badge(status_label, "-", None)
-        name_input = QLineEdit(step.name if step else f"{self.t('step')} {len(self.block_cards) + 1}")
-        remove_button = QPushButton(self.t("delete"))
-        remove_button.setObjectName("Danger")
-        up_button = QPushButton(self.t("move_up"))
-        down_button = QPushButton(self.t("move_down"))
-        header.addWidget(number_label)
-        header.addWidget(name_input, 1)
-        header.addWidget(status_label)
-        header.addWidget(up_button)
-        header.addWidget(down_button)
-        header.addWidget(remove_button)
-        card_layout.addLayout(header)
-
-        call_row = QHBoxLayout()
-        call_row.addWidget(QLabel(self.t("call")))
-        call_combo = QComboBox()
-        for call in self.calls:
-            label = f"{call.collection} / {call.method} {call.name}"
-            call_combo.addItem(label, call.id)
-        if step is not None:
-            index = call_combo.findData(step.call_id)
-            if index >= 0:
-                call_combo.setCurrentIndex(index)
-        call_row.addWidget(call_combo, 1)
-        card_layout.addLayout(call_row)
-
-        card_layout.addWidget(QLabel(self.t("extractors")))
-        extractors_edit = QPlainTextEdit(format_extractors(step.extractors) if step else "")
-        extractors_edit.setMaximumHeight(76)
-        extractors_edit.setPlaceholderText("token=token; id=features[0].attributes.OBJECTID")
-        card_layout.addWidget(extractors_edit)
-
-        card_data = {
-            "frame": card,
-            "number": number_label,
-            "status": status_label,
-            "name": name_input,
-            "call": call_combo,
-            "extractors": extractors_edit,
-        }
-        self.block_cards.append(card_data)
-        remove_button.clicked.connect(lambda _checked=False: self._remove_block_card(card_data))
-        up_button.clicked.connect(lambda _checked=False: self._move_block_card(card_data, -1))
-        down_button.clicked.connect(lambda _checked=False: self._move_block_card(card_data, 1))
-
-        self.blocks_layout.insertWidget(max(0, self.blocks_layout.count() - 1), card)
-        self._renumber_block_cards()
-
-    def _clear_block_cards(self) -> None:
-        for card in self.block_cards:
-            frame = card["frame"]
-            self.blocks_layout.removeWidget(frame)
-            frame.deleteLater()
-        self.block_cards.clear()
-
-    def _remove_block_card(self, card_data: dict | None = None) -> None:
-        if not self.block_cards:
-            return
-        if card_data is None:
-            card_data = self.block_cards[-1]
-        if card_data not in self.block_cards:
-            return
-        self.block_cards.remove(card_data)
-        frame = card_data["frame"]
-        self.blocks_layout.removeWidget(frame)
-        frame.deleteLater()
-        self._renumber_block_cards()
-
-    def _move_block_card(self, card_data: dict | None, direction: int) -> None:
-        if card_data is None or card_data not in self.block_cards:
-            if not self.block_cards:
-                return
-            card_data = self.block_cards[-1]
-        index = self.block_cards.index(card_data)
-        target = index + direction
-        if target < 0 or target >= len(self.block_cards):
-            return
-        self.block_cards[index], self.block_cards[target] = self.block_cards[target], self.block_cards[index]
-        self.blocks_layout.removeWidget(card_data["frame"])
-        self.blocks_layout.insertWidget(target, card_data["frame"])
-        self._renumber_block_cards()
-
-    def _renumber_block_cards(self) -> None:
-        for index, card in enumerate(self.block_cards, start=1):
-            card["number"].setText(f"{index}.")
-
     def _remove_selected_step(self) -> None:
-        if str(self.mode_combo.currentData() or "linear") == "blocks":
-            self._remove_block_card()
-            return
         if str(self.mode_combo.currentData() or "linear") == "canvas":
             self.workflow_canvas.remove_selected()
             return
@@ -498,9 +375,6 @@ class WorkflowDialog(QDialog):
             self.steps_table.removeRow(row)
 
     def _move_selected_step(self, direction: int) -> None:
-        if str(self.mode_combo.currentData() or "linear") == "blocks":
-            self._move_block_card(self.block_cards[-1] if self.block_cards else None, direction)
-            return
         if str(self.mode_combo.currentData() or "linear") == "canvas":
             self.workflow_canvas.move_selected(direction)
             return
@@ -522,6 +396,7 @@ class WorkflowDialog(QDialog):
         workflow = Workflow(
             name=self.name_input.text().strip() or self.t("workflow_new"),
             mode=str(self.mode_combo.currentData() or "linear"),
+            auto_map_params=self.auto_params_checkbox.isChecked(),
         )
         if selected is not None:
             workflow.id = selected.id
@@ -531,18 +406,12 @@ class WorkflowDialog(QDialog):
         return workflow
 
     def _steps_from_mode(self, mode: str) -> list[WorkflowStep]:
-        if mode == "blocks":
-            return self._steps_from_blocks()
         if mode == "canvas":
             return self.workflow_canvas.steps()
         return self._steps_from_table()
 
     def _replace_steps_in_mode(self, mode: str, steps: list[WorkflowStep]) -> None:
-        if mode == "blocks":
-            self._clear_block_cards()
-            for step in steps:
-                self._add_block_card(step)
-        elif mode == "canvas":
+        if mode == "canvas":
             self.workflow_canvas.set_steps(steps)
         else:
             self.steps_table.setRowCount(0)
@@ -567,29 +436,10 @@ class WorkflowDialog(QDialog):
             )
         return steps
 
-    def _steps_from_blocks(self) -> list[WorkflowStep]:
-        steps: list[WorkflowStep] = []
-        for index, card in enumerate(self.block_cards, start=1):
-            name_input = card["name"]
-            call_combo = card["call"]
-            extractors_edit = card["extractors"]
-            if not isinstance(name_input, QLineEdit) or not isinstance(call_combo, QComboBox):
-                continue
-            if not isinstance(extractors_edit, QPlainTextEdit):
-                continue
-            steps.append(
-                WorkflowStep(
-                    name=name_input.text().strip() or f"{self.t('step')} {index}",
-                    call_id=str(call_combo.currentData() or ""),
-                    extractors=parse_extractors(extractors_edit.toPlainText()),
-                )
-            )
-        return steps
-
     def _save_current_workflow(self) -> Workflow | None:
         try:
             workflow = self._workflow_from_ui()
-        except ValueError as error:
+        except ExtractorParseError as error:
             QMessageBox.warning(self, self.t("invalid_extractors_title"), str(error))
             return None
 
@@ -610,7 +460,7 @@ class WorkflowDialog(QDialog):
         workflow = self._save_current_workflow()
         if workflow is None:
             return
-        if workflow.mode not in {"linear", "blocks", "canvas"}:
+        if workflow.mode not in {"linear", "canvas"}:
             QMessageBox.information(self, self.t("workflow"), self.t("workflow_mode_not_runnable"))
             return
         if not workflow.steps:
@@ -637,7 +487,10 @@ class WorkflowDialog(QDialog):
         self.output.setPlainText(json.dumps(self._summary_result(result), indent=2, ensure_ascii=False))
         self._populate_step_outputs(result)
         self._update_block_statuses(result)
-        self._show_toast(self.t("workflow_completed"), "success")
+        if self._result_has_step_error(result):
+            self._show_toast(self.t("workflow_completed_with_errors"), "warning")
+        else:
+            self._show_toast(self.t("workflow_completed"), "success")
 
     def _show_run_error(self, error: str) -> None:
         self.output.setPlainText(error)
@@ -662,11 +515,19 @@ class WorkflowDialog(QDialog):
                     "reason": step.get("reason"),
                     "elapsed_ms": step.get("elapsed_ms"),
                     "extracted": step.get("extracted", {}),
+                    "auto_params": step.get("auto_params", {}),
                     "response_size": len(body.encode("utf-8")),
                     "error": step.get("error", ""),
                 }
             )
         return summary
+
+    @staticmethod
+    def _result_has_step_error(result: dict) -> bool:
+        steps = result.get("steps") if isinstance(result, dict) else []
+        if not isinstance(steps, list):
+            return False
+        return any(isinstance(step, dict) and bool(step.get("error")) for step in steps)
 
     def _populate_step_outputs(self, result: dict) -> None:
         self._clear_step_outputs()
@@ -678,28 +539,24 @@ class WorkflowDialog(QDialog):
             if not isinstance(step, dict):
                 continue
             status = step.get("status")
-            status_text = str(status) if isinstance(status, int) else ("ERR" if step.get("error") else "-")
-            item = QListWidgetItem(f"{index}. {status_text}  {step.get('step_name') or step.get('call_name') or 'Step'}")
-            item.setData(Qt.ItemDataRole.UserRole, step)
-            self.step_output_list.addItem(item)
+            status_text = "ERR" if step.get("error") else (str(status) if isinstance(status, int) else "-")
+            label = f"{index}. {status_text}  {step.get('step_name') or step.get('call_name') or 'Step'}"
+            self.step_output_combo.addItem(label, step)
 
-        if self.step_output_list.count() > 0:
-            self.step_output_list.setCurrentRow(0)
+        if self.step_output_combo.count() > 0:
+            self.step_output_combo.setCurrentIndex(0)
 
     def _clear_step_outputs(self) -> None:
-        self.step_output_list.clear()
+        self.step_output_combo.clear()
         self.step_output_body.clear()
         self.step_output_headers.clear()
 
-    def _show_selected_step_output(self, row: int) -> None:
-        if row < 0:
+    def _show_selected_step_output(self, index: int) -> None:
+        if index < 0:
             self.step_output_body.clear()
             self.step_output_headers.clear()
             return
-        item = self.step_output_list.item(row)
-        if item is None:
-            return
-        step = item.data(Qt.ItemDataRole.UserRole)
+        step = self.step_output_combo.itemData(index)
         if not isinstance(step, dict):
             return
         body = str(step.get("response_body") or step.get("error") or "")
@@ -727,34 +584,6 @@ class WorkflowDialog(QDialog):
         mode = str(self.mode_combo.currentData() or "linear")
         if mode == "canvas":
             self.workflow_canvas.update_statuses(result)
-            return
-        if mode != "blocks":
-            return
-
-        steps = result.get("steps") if isinstance(result, dict) else []
-        step_results = steps if isinstance(steps, list) else []
-        for index, card in enumerate(self.block_cards):
-            status_label = card.get("status")
-            if not isinstance(status_label, QLabel):
-                continue
-
-            if index >= len(step_results):
-                set_status_badge(status_label, "-", None)
-                continue
-
-            step_result = step_results[index]
-            if not isinstance(step_result, dict):
-                set_status_badge(status_label, "-", None)
-                continue
-
-            status = step_result.get("status")
-            error = str(step_result.get("error") or "")
-            if isinstance(status, int):
-                set_status_badge(status_label, str(status), status)
-            elif error:
-                set_status_badge(status_label, "ERR", None, True)
-            else:
-                set_status_badge(status_label, "-", None)
 
     def _handle_mode_changed(self) -> None:
         new_mode = str(self.mode_combo.currentData() or "linear")
@@ -764,7 +593,7 @@ class WorkflowDialog(QDialog):
             try:
                 steps = self._steps_from_mode(old_mode)
                 self._replace_steps_in_mode(new_mode, steps)
-            except ValueError as error:
+            except ExtractorParseError as error:
                 QMessageBox.warning(self, self.t("invalid_extractors_title"), str(error))
                 previous_index = self.mode_combo.findData(old_mode)
                 if previous_index >= 0:
@@ -779,9 +608,9 @@ class WorkflowDialog(QDialog):
 
     def _sync_mode_view(self) -> None:
         mode = str(self.mode_combo.currentData() or "linear")
-        index_by_mode = {"linear": 0, "blocks": 1, "canvas": 2}
+        index_by_mode = {"linear": 0, "canvas": 1}
         self.mode_stack.setCurrentIndex(index_by_mode.get(mode, 0))
-        editable = mode in {"linear", "blocks", "canvas"}
+        editable = mode in {"linear", "canvas"}
         for button in (
             self.add_step_button,
             self.remove_step_button,

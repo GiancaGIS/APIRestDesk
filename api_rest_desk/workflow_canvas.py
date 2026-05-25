@@ -3,18 +3,21 @@ from __future__ import annotations
 import math
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
+from PyQt6.QtGui import QColor, QFont, QKeyEvent, QMouseEvent, QPainter, QPainterPath, QPen, QPolygonF, QWheelEvent
 from PyQt6.QtWidgets import (
     QComboBox,
     QFrame,
     QGraphicsObject,
     QGraphicsPathItem,
+    QGraphicsPolygonItem,
     QGraphicsScene,
     QGraphicsView,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMenu,
     QPlainTextEdit,
+    QPushButton,
     QSplitter,
     QVBoxLayout,
     QWidget,
@@ -23,11 +26,19 @@ from PyQt6.QtWidgets import (
 from api_rest_desk.i18n import Translator
 from api_rest_desk.models import RestCall, WorkflowStep
 from api_rest_desk.settings import load_settings
-from api_rest_desk.theme import set_status_badge, status_class
+from api_rest_desk.theme import PALETTE, set_status_badge, status_class
 from api_rest_desk.workflow import format_extractors, parse_extractors
 
 
+ZOOM_FACTOR = 1.15
+ZOOM_MIN = 0.3
+ZOOM_MAX = 3.0
+ARROW_SIZE = 10.0
+
+
 class WorkflowCanvasNode(QGraphicsObject):
+    """Draggable node representing a single workflow step on the canvas."""
+
     WIDTH = 230
     HEIGHT = 96
 
@@ -43,6 +54,8 @@ class WorkflowCanvasNode(QGraphicsObject):
         self.setFlag(QGraphicsObject.GraphicsItemFlag.ItemIsSelectable, True)
         self.setFlag(QGraphicsObject.GraphicsItemFlag.ItemSendsGeometryChanges, True)
         self.setCursor(Qt.CursorShape.OpenHandCursor)
+        self.setAcceptHoverEvents(True)
+        self.setToolTip(self._build_tooltip())
 
     def boundingRect(self) -> QRectF:
         return QRectF(0, 0, self.WIDTH, self.HEIGHT)
@@ -50,10 +63,10 @@ class WorkflowCanvasNode(QGraphicsObject):
     def paint(self, painter: QPainter, option, widget=None) -> None:
         del option, widget
         dark = self.canvas.dark_mode
-        background = QColor("#0f172a" if dark else "#ffffff")
-        border = QColor("#60a5fa" if self.isSelected() else ("#475569" if dark else "#cbd5e1"))
-        text = QColor("#f8fafc" if dark else "#101828")
-        muted = QColor("#cbd5e1" if dark else "#667085")
+        background = QColor(PALETTE["dark_void"] if dark else PALETTE["white"])
+        border = QColor(PALETTE["cornflower_blue"] if self.isSelected() else (PALETTE["charcoal_blue"] if dark else PALETTE["silver_gray"]))
+        text = QColor(PALETTE["snow_white"] if dark else PALETTE["rich_black"])
+        muted = QColor(PALETTE["silver_gray"] if dark else PALETTE["dim_gray"])
 
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(QPen(border, 2 if self.isSelected() else 1))
@@ -82,6 +95,26 @@ class WorkflowCanvasNode(QGraphicsObject):
         painter.setFont(QFont("Segoe UI", 8))
         painter.drawText(call_rect, Qt.AlignmentFlag.AlignLeft, self._elide(painter, self.canvas.call_label(self.step.call_id)))
 
+    def contextMenuEvent(self, event) -> None:
+        """Show a right-click context menu on the node."""
+        menu = QMenu()
+        t = self.canvas.translator.t
+        delete_action = menu.addAction(t("delete"))
+        move_up_action = menu.addAction(t("move_up"))
+        move_down_action = menu.addAction(t("move_down"))
+
+        chosen = menu.exec(event.screenPos())
+        if chosen == delete_action:
+            idx = self.canvas.nodes.index(self) if self in self.canvas.nodes else None
+            if idx is not None:
+                del self.canvas._steps[idx]
+                self.canvas._layout_steps()
+                self.canvas._rebuild_scene(select_index=min(idx, len(self.canvas._steps) - 1))
+        elif chosen == move_up_action:
+            self.canvas.move_selected(-1)
+        elif chosen == move_down_action:
+            self.canvas.move_selected(1)
+
     def itemChange(self, change: QGraphicsObject.GraphicsItemChange, value):
         if change == QGraphicsObject.GraphicsItemChange.ItemPositionHasChanged:
             position = self.pos()
@@ -89,6 +122,7 @@ class WorkflowCanvasNode(QGraphicsObject):
             self.step.position_y = position.y()
             self.canvas.refresh_connections()
             self.canvas.update_drop_candidate(self)
+            self.canvas._fit_scene_rect()
         return super().itemChange(change, value)
 
     def mousePressEvent(self, event) -> None:
@@ -101,21 +135,36 @@ class WorkflowCanvasNode(QGraphicsObject):
         self.canvas.commit_drop_candidate(self)
 
     def set_status(self, status: int | None, network_error: bool = False) -> None:
+        """Update the node's status badge and tooltip."""
         self.status = status
         self.network_error = network_error
         self.status_text = "ERR" if network_error else (str(status) if status is not None else "-")
+        self.setToolTip(self._build_tooltip())
         self.update()
+
+    def _build_tooltip(self) -> str:
+        """Build a rich tooltip with step name, call label, and status."""
+        call = self.canvas.call_label(self.step.call_id)
+        lines = [
+            f"<b>{self.step.name or 'Step'}</b>",
+            call,
+        ]
+        if self.status is not None:
+            lines.append(f"Status: {self.status_text}")
+        if self.step.extractors:
+            lines.append(f"Extractors: {format_extractors(self.step.extractors)}")
+        return "<br>".join(lines)
 
     def _badge_colors(self) -> tuple[QColor, QColor]:
         dark = self.canvas.dark_mode
         badge_class = status_class(self.status, self.network_error)
         colors = {
-            "neutral": ("#334155", "#e2e8f0") if dark else ("#eef2f6", "#475467"),
-            "success": ("#064e3b", "#bbf7d0") if dark else ("#dcfae6", "#027a48"),
-            "redirect": ("#1e3a8a", "#bfdbfe") if dark else ("#d1e9ff", "#175cd3"),
-            "client_error": ("#78350f", "#fde68a") if dark else ("#fef0c7", "#b54708"),
-            "server_error": ("#7f1d1d", "#fecaca") if dark else ("#fee4e2", "#b42318"),
-            "network_error": ("#7f1d1d", "#fecaca") if dark else ("#fee4e2", "#b42318"),
+            "neutral": (PALETTE["dark_gunmetal"], PALETTE["pale_slate"]) if dark else (PALETTE["light_blue_gray"], PALETTE["gunmetal"]),
+            "success": (PALETTE["deep_emerald"], PALETTE["light_mint"]) if dark else (PALETTE["pale_mint_green"], PALETTE["forest_green"]),
+            "redirect": (PALETTE["deep_sapphire"], PALETTE["baby_blue"]) if dark else (PALETTE["pale_cerulean"], PALETTE["denim_blue"]),
+            "client_error": (PALETTE["chocolate_brown"], PALETTE["buff_yellow"]) if dark else (PALETTE["champagne"], PALETTE["burnt_orange"]),
+            "server_error": (PALETTE["maroon"], PALETTE["light_coral"]) if dark else (PALETTE["pale_pink"], PALETTE["crimson_red"]),
+            "network_error": (PALETTE["maroon"], PALETTE["light_coral"]) if dark else (PALETTE["pale_pink"], PALETTE["crimson_red"]),
         }
         background, foreground = colors.get(badge_class, colors["neutral"])
         return QColor(background), QColor(foreground)
@@ -125,7 +174,79 @@ class WorkflowCanvasNode(QGraphicsObject):
         return painter.fontMetrics().elidedText(text, Qt.TextElideMode.ElideRight, WorkflowCanvasNode.WIDTH - 28)
 
 
+class _ZoomableView(QGraphicsView):
+    """QGraphicsView subclass with mouse-wheel zoom and keyboard shortcuts."""
+
+    def __init__(self, scene: QGraphicsScene, canvas: WorkflowCanvas) -> None:
+        super().__init__(scene)
+        self._canvas = canvas
+        self._zoom = 1.0
+        self._panning = False
+        self._pan_start = QPointF()
+
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        """Zoom in/out with the mouse wheel."""
+        # ...existing code...
+        if event.angleDelta().y() > 0:
+            factor = ZOOM_FACTOR
+        else:
+            factor = 1 / ZOOM_FACTOR
+
+        new_zoom = self._zoom * factor
+        if new_zoom < ZOOM_MIN or new_zoom > ZOOM_MAX:
+            return
+
+        self._zoom = new_zoom
+        self.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.scale(factor, factor)
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        """Start panning when the middle mouse button is pressed."""
+        if event.button() == Qt.MouseButton.MiddleButton:
+            self._panning = True
+            self._pan_start = event.position()
+            self.setCursor(Qt.CursorShape.ClosedHandCursor)
+            event.accept()
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        """Pan the canvas while the middle button is held down."""
+        if self._panning:
+            delta = event.position() - self._pan_start
+            self._pan_start = event.position()
+            self.horizontalScrollBar().setValue(
+                self.horizontalScrollBar().value() - int(delta.x())
+            )
+            self.verticalScrollBar().setValue(
+                self.verticalScrollBar().value() - int(delta.y())
+            )
+            event.accept()
+        else:
+            super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        """Stop panning when the middle button is released."""
+        if event.button() == Qt.MouseButton.MiddleButton and self._panning:
+            self._panning = False
+            self.setCursor(Qt.CursorShape.ArrowCursor)
+            event.accept()
+        else:
+            super().mouseReleaseEvent(event)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        """Handle Delete key to remove the selected node."""
+        if event.key() in (Qt.Key.Key_Delete, Qt.Key.Key_Backspace):
+            self._canvas.remove_selected()
+        else:
+            super().keyPressEvent(event)
+
+
 class WorkflowCanvas(QWidget):
+    """Visual canvas editor for building workflows by dragging nodes
+    and connecting them with bezier curves.
+    """
+
     def __init__(
         self,
         calls: list[RestCall],
@@ -156,12 +277,29 @@ class WorkflowCanvas(QWidget):
 
         self.scene = QGraphicsScene(self)
         self.scene.selectionChanged.connect(self._refresh_editor)
-        self.view = QGraphicsView(self.scene)
+        self.view = _ZoomableView(self.scene, self)
         self.view.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         self.view.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
         self.view.setMinimumHeight(280)
         self.view.setSceneRect(0, 0, 1100, 520)
         self._apply_scene_colors()
+
+        canvas_container = QWidget()
+        canvas_layout = QVBoxLayout(canvas_container)
+        canvas_layout.setContentsMargins(0, 0, 0, 0)
+        canvas_layout.setSpacing(4)
+
+        toolbar = QHBoxLayout()
+        toolbar.setContentsMargins(0, 0, 0, 0)
+        self.home_button = QPushButton("⌂ Home")
+        self.home_button.setFixedHeight(28)
+        self.home_button.setMaximumWidth(90)
+        self.home_button.setToolTip("Fit all nodes in view")
+        self.home_button.clicked.connect(self.fit_all)
+        toolbar.addWidget(self.home_button)
+        toolbar.addStretch(1)
+        canvas_layout.addLayout(toolbar)
+        canvas_layout.addWidget(self.view, 1)
 
         self.details = QFrame()
         self.details.setObjectName("Metrics")
@@ -198,12 +336,14 @@ class WorkflowCanvas(QWidget):
         details_layout.addWidget(self.extractors_edit)
         details_layout.addStretch(1)
 
-        splitter.addWidget(self.view)
+        splitter.addWidget(canvas_container)
         splitter.addWidget(self.details)
         splitter.setSizes([680, 260])
 
     def retranslate_ui(self) -> None:
         self.t = self.translator.t
+        self.home_button.setText(f"⌂ {self.t('canvas_home')}")
+        self.home_button.setToolTip(self.t("canvas_home_tooltip"))
         self.details_title.setText(self.t("workflow_canvas_node_details"))
         self.name_label.setText(self.t("name"))
         self.call_label_widget.setText(self.t("call"))
@@ -213,15 +353,18 @@ class WorkflowCanvas(QWidget):
         self._refresh_editor()
 
     def set_steps(self, steps: list[WorkflowStep]) -> None:
+        """Load a list of workflow steps onto the canvas."""
         self._steps = steps[:]
         self._ensure_positions()
         self._rebuild_scene()
 
     def steps(self) -> list[WorkflowStep]:
+        """Return the current steps, committing any pending editor changes."""
         self._commit_editor()
         return self._steps[:]
 
     def add_step(self, step: WorkflowStep | None = None) -> None:
+        """Add a new step node to the canvas."""
         if not isinstance(step, WorkflowStep):
             step = WorkflowStep(
                 name=f"{self.t('step')} {len(self._steps) + 1}",
@@ -232,6 +375,7 @@ class WorkflowCanvas(QWidget):
         self._rebuild_scene(select_index=len(self._steps) - 1)
 
     def remove_selected(self) -> None:
+        """Remove the currently selected node from the canvas."""
         index = self._selected_index()
         if index is None:
             index = len(self._steps) - 1 if self._steps else None
@@ -242,6 +386,7 @@ class WorkflowCanvas(QWidget):
         self._rebuild_scene(select_index=min(index, len(self._steps) - 1))
 
     def move_selected(self, direction: int) -> None:
+        """Swap the selected node with its neighbor in the given direction."""
         index = self._selected_index()
         if index is None:
             index = len(self._steps) - 1 if self._steps else None
@@ -255,6 +400,7 @@ class WorkflowCanvas(QWidget):
         self._rebuild_scene(select_index=target)
 
     def update_statuses(self, result: dict) -> None:
+        """Update node status badges from a workflow run result."""
         steps = result.get("steps") if isinstance(result, dict) else []
         step_results = steps if isinstance(steps, list) else []
         for index, node in enumerate(self.nodes):
@@ -271,25 +417,42 @@ class WorkflowCanvas(QWidget):
         self._refresh_editor()
 
     def refresh_connections(self) -> None:
+        """Redraw all bezier connections between nodes, with arrowheads."""
         for connection in self.connections:
             self.scene.removeItem(connection["item"])
+            arrow = connection.get("arrow")
+            if arrow is not None:
+                self.scene.removeItem(arrow)
         self.connections.clear()
 
-        default_pen = QPen(QColor("#60a5fa" if self.dark_mode else "#2e6ff2"), 2)
-        highlight_pen = QPen(QColor("#f59e0b"), 4)
+        default_color = QColor(PALETTE["cornflower_blue"] if self.dark_mode else PALETTE["vivid_blue"])
+        highlight_color = QColor(PALETTE["amber"])
+        default_pen = QPen(default_color, 2)
+        highlight_pen = QPen(highlight_color, 4)
+
         for index, (left, right) in enumerate(zip(self.nodes, self.nodes[1:])):
+            is_highlighted = self.drop_candidate == (index, index + 1)
+            color = highlight_color if is_highlighted else default_color
+            pen = highlight_pen if is_highlighted else default_pen
+
             start = left.pos() + QPointF(WorkflowCanvasNode.WIDTH, WorkflowCanvasNode.HEIGHT / 2)
             end = right.pos() + QPointF(0, WorkflowCanvasNode.HEIGHT / 2)
             distance = max(80, abs(end.x() - start.x()) / 2)
             path = QPainterPath(start)
             path.cubicTo(start + QPointF(distance, 0), end - QPointF(distance, 0), end)
-            connection = QGraphicsPathItem(path)
-            connection.setPen(highlight_pen if self.drop_candidate == (index, index + 1) else default_pen)
-            connection.setZValue(-1)
-            self.scene.addItem(connection)
+            connection_item = QGraphicsPathItem(path)
+            connection_item.setPen(pen)
+            connection_item.setZValue(-1)
+            self.scene.addItem(connection_item)
+
+            # Arrowhead at the end of the connection
+            arrow_item = self._create_arrowhead(start, end, color)
+            self.scene.addItem(arrow_item)
+
             self.connections.append(
                 {
-                    "item": connection,
+                    "item": connection_item,
+                    "arrow": arrow_item,
                     "left_index": index,
                     "right_index": index + 1,
                     "start": start,
@@ -297,7 +460,58 @@ class WorkflowCanvas(QWidget):
                 }
             )
 
+    @staticmethod
+    def _create_arrowhead(start: QPointF, end: QPointF, color: QColor) -> QGraphicsPolygonItem:
+        """Create a small triangular arrowhead pointing into *end*."""
+        dx = end.x() - start.x()
+        dy = end.y() - start.y()
+        length = math.hypot(dx, dy)
+        if length == 0:
+            length = 1
+        ux, uy = dx / length, dy / length
+        px, py = -uy, ux  # perpendicular
+
+        tip = end
+        base_left = QPointF(
+            tip.x() - ARROW_SIZE * ux + (ARROW_SIZE / 2.5) * px,
+            tip.y() - ARROW_SIZE * uy + (ARROW_SIZE / 2.5) * py,
+        )
+        base_right = QPointF(
+            tip.x() - ARROW_SIZE * ux - (ARROW_SIZE / 2.5) * px,
+            tip.y() - ARROW_SIZE * uy - (ARROW_SIZE / 2.5) * py,
+        )
+        polygon = QPolygonF([tip, base_left, base_right])
+        item = QGraphicsPolygonItem(polygon)
+        item.setBrush(color)
+        item.setPen(QPen(color, 1))
+        item.setZValue(-1)
+        return item
+
+    def _fit_scene_rect(self) -> None:
+        """Expand the scene rect to fit all nodes with generous padding."""
+        if not self.nodes:
+            self.view.setSceneRect(0, 0, 1100, 520)
+            return
+        items_rect = self.scene.itemsBoundingRect()
+        padded = items_rect.adjusted(-100, -100, 200, 200)
+        minimum = QRectF(0, 0, 1100, 520)
+        self.view.setSceneRect(padded.united(minimum))
+
+    def fit_all(self) -> None:
+        """Reset zoom and pan so that all nodes are visible and centered."""
+        self.view.resetTransform()
+        self.view._zoom = 1.0
+        if not self.nodes:
+            return
+        self._fit_scene_rect()
+        rect = self.scene.itemsBoundingRect().adjusted(-40, -40, 40, 40)
+        self.view.fitInView(rect, Qt.AspectRatioMode.KeepAspectRatio)
+        # Update the internal zoom tracker to match the applied transform
+        current_scale = self.view.transform().m11()
+        self.view._zoom = max(ZOOM_MIN, min(ZOOM_MAX, current_scale))
+
     def update_drop_candidate(self, node: WorkflowCanvasNode) -> None:
+        """Update the visual drop candidate indicator between two nodes."""
         if node not in self.nodes or len(self.nodes) < 3:
             self._set_drop_candidate(None)
             return
@@ -321,6 +535,7 @@ class WorkflowCanvas(QWidget):
         self._set_drop_candidate(best_pair)
 
     def commit_drop_candidate(self, node: WorkflowCanvasNode) -> None:
+        """Commit the drop action, moving a node to a new position between two other nodes."""
         if self.drop_candidate is None or node not in self.nodes:
             self._set_drop_candidate(None)
             return
@@ -345,6 +560,7 @@ class WorkflowCanvas(QWidget):
 
     @staticmethod
     def _distance_to_segment(point: QPointF, start: QPointF, end: QPointF) -> float:
+        """Calculate the minimum distance from a point to a line segment."""
         segment_x = end.x() - start.x()
         segment_y = end.y() - start.y()
         length_squared = (segment_x * segment_x) + (segment_y * segment_y)
@@ -378,6 +594,7 @@ class WorkflowCanvas(QWidget):
             self.nodes.append(node)
 
         self.refresh_connections()
+        self._fit_scene_rect()
         if select_index is not None and 0 <= select_index < len(self.nodes):
             self.nodes[select_index].setSelected(True)
             self.view.centerOn(self.nodes[select_index])
@@ -429,6 +646,7 @@ class WorkflowCanvas(QWidget):
             node.step.extractors = parse_extractors(self.extractors_edit.toPlainText())
         except ValueError:
             pass
+        node.setToolTip(node._build_tooltip())
         node.update()
 
     def _commit_editor(self) -> None:
@@ -438,6 +656,7 @@ class WorkflowCanvas(QWidget):
         node.step.name = self.name_input.text().strip() or f"{self.t('step')} {node.index + 1}"
         node.step.call_id = str(self.call_combo.currentData() or "")
         node.step.extractors = parse_extractors(self.extractors_edit.toPlainText())
+        node.setToolTip(node._build_tooltip())
         node.update()
 
     def _fill_call_combo(self) -> None:
@@ -466,4 +685,4 @@ class WorkflowCanvas(QWidget):
 
     def _apply_scene_colors(self) -> None:
         self.dark_mode = str(load_settings().get("theme") or "light") == "dark"
-        self.scene.setBackgroundBrush(QColor("#111827" if self.dark_mode else "#f8fafc"))
+        self.scene.setBackgroundBrush(QColor(PALETTE["near_black"] if self.dark_mode else PALETTE["snow_white"]))
