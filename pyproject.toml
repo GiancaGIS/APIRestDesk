@@ -8,7 +8,7 @@ authors = [
     { name = "GiancaGIS" }
 ]
 license = { text = "MIT" }
-version = "1.0.0"
+version = "1.0.1"
 description = "Desktop REST client built with PyQt6."
 readme = "README.md"
 requires-python = ">=3.11"

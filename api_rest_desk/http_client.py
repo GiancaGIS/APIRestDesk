@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import time
 from typing import Any
+from urllib.parse import parse_qsl
 
 import httpx
 
@@ -54,7 +55,7 @@ class RestClient:
             httpx.HTTPError: On transport-level failures (DNS, timeout, etc.).
         """
         headers = dict(call.headers)
-        headers.setdefault("User-Agent", f"PyQt {APP_NAME.split(" ")[0]}/0.1")
+        headers.setdefault("User-Agent", f"PyQt {APP_NAME.split(' ')[0]}/0.1")
         params: dict[str, str] = dict(call.query_params)
         auth: tuple[str, str] | None = None
         retry_statuses = self._parse_retry_statuses(call.retry_statuses)
@@ -84,11 +85,7 @@ class RestClient:
                     content = call.body.encode("utf-8")
                     headers.setdefault(self._label_content_type, self._content_type['json'])
             elif body_type == "form":
-                form_data = dict(
-                    pair.split("=", 1)
-                    for pair in call.body.split("&")
-                    if "=" in pair
-                )
+                form_data = dict(parse_qsl(call.body, keep_blank_values=True))
                 if params:
                     for k, v in params.items():
                         form_data.setdefault(k, v)
@@ -106,7 +103,7 @@ class RestClient:
 
         started = time.perf_counter()
         cookies = self.session_cookies if call.use_session_cookies else None
-        with httpx.Client(timeout=timeout, follow_redirects=call.follow_redirects, cookies=cookies) as client:
+        with httpx.Client(timeout=timeout, follow_redirects=call.follow_redirects, cookies=cookies, verify=call.verify) as client:
             response: httpx.Response | None = None
             for attempt in range(attempts):
                 response = client.request(

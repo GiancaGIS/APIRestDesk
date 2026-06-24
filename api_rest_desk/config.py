@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 APP_NAME = "APIRestDesk 🚀"
 AUTHOR = "GiancaGIS"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.0.1"
 COLLECTION_FILE = ROOT_DIR / "rest_client_collection.json"
 FOLDERS_FILE = ROOT_DIR / "rest_client_folders.json"
 HISTORY_FILE = ROOT_DIR / "rest_client_history.json"

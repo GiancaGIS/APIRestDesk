@@ -88,6 +88,7 @@ class RestClientWindow(QMainWindow):
         self.current_worker: HttpWorker | None = None
         self.pending_call: RestCall | None = None
         self.toast: ToastNotification | None = None
+        self._workflow_dialog: WorkflowDialog | None = None
 
         self._build_ui()
         self._apply_style()
@@ -127,6 +128,8 @@ class RestClientWindow(QMainWindow):
         self.collection_tree = QTreeWidget()
         self.collection_tree.setHeaderHidden(True)
         self.collection_tree.currentItemChanged.connect(self._load_selected_call)
+        self.collection_tree.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.collection_tree.customContextMenuRequested.connect(self._show_tree_context_menu)
         self.history_list = QListWidget()
         self.history_list.currentItemChanged.connect(self._load_selected_history)
         self.sidebar_tabs.addTab(self.collection_tree, "")
@@ -217,6 +220,8 @@ class RestClientWindow(QMainWindow):
         self.follow_redirects_check.setChecked(True)
         self.retry_count_label = QLabel()
         self.retry_count_spin = QSpinBox()
+        self.verify_rest_call = QCheckBox()
+        self.verify_rest_call.setChecked(True)
         self.retry_count_spin.setRange(0, 10)
         self.retry_statuses_label = QLabel()
         self.retry_statuses_input = QLineEdit("429,500,502,503,504")
@@ -270,6 +275,7 @@ class RestClientWindow(QMainWindow):
         options_layout.addRow("", self.follow_redirects_check)
         options_layout.addRow("", self.use_session_cookies_check)
         options_layout.addRow(self.retry_count_label, self.retry_count_spin)
+        options_layout.addRow("", self.verify_rest_call)
         options_layout.addRow(self.retry_statuses_label, self.retry_statuses_input)
 
         self.assertions_editor = QPlainTextEdit()
@@ -312,9 +318,12 @@ class RestClientWindow(QMainWindow):
         self.response_search.returnPressed.connect(self._find_in_response)
         self.copy_response_button = QPushButton()
         self.save_response_button = QPushButton()
+        self.copy_json_path_button = QPushButton()
         self.copy_response_button.clicked.connect(self._copy_response_body)
         self.save_response_button.clicked.connect(self._save_response_body)
+        self.copy_json_path_button.clicked.connect(self._copy_selected_json_path)
         response_top.addWidget(self.response_search)
+        response_top.addWidget(self.copy_json_path_button)
         response_top.addWidget(self.copy_response_button)
         response_top.addWidget(self.save_response_button)
         response_card_layout.addLayout(response_top)
@@ -395,6 +404,10 @@ class RestClientWindow(QMainWindow):
         self.new_folder_action = QAction(self)
         self.new_folder_action.triggered.connect(self._new_folder)
         self.collection_menu.addAction(self.new_folder_action)
+
+        self.rename_folder_action = QAction(self)
+        self.rename_folder_action.triggered.connect(self._rename_folder_via_menu)
+        self.collection_menu.addAction(self.rename_folder_action)
 
         self.save_action = QAction(self)
         self.save_action.triggered.connect(self._save_current_call)
@@ -478,6 +491,7 @@ class RestClientWindow(QMainWindow):
         self.timeout_label.setText(self.t("timeout"))
         self.follow_redirects_check.setText(self.t("follow_redirects"))
         self.use_session_cookies_check.setText(self.t("use_session_cookies"))
+        self.verify_rest_call.setText(self.t("verify_rest_call"))
         self.retry_count_label.setText(self.t("retry_count"))
         self.retry_statuses_label.setText(self.t("retry_statuses"))
         self.retry_statuses_input.setPlaceholderText(self.t("retry_statuses"))
@@ -494,6 +508,7 @@ class RestClientWindow(QMainWindow):
         self.body_type_combo.setItemText(2, self.t("form_urlencoded"))
         self.response_title.setText(self.t("response"))
         self.response_search.setPlaceholderText(self.t("find"))
+        self.copy_json_path_button.setText(self.t("copy_path"))
         self.copy_response_button.setText(self.t("copy"))
         self.save_response_button.setText(self.t("save_response"))
         self.status_label.setText(self.t("status"))
@@ -507,6 +522,7 @@ class RestClientWindow(QMainWindow):
         self.collection_menu.setTitle(self.t("collection_menu"))
         self.new_action.setText(self.t("new_call"))
         self.new_folder_action.setText(self.t("new_folder"))
+        self.rename_folder_action.setText(self.t("rename_folder"))
         self.save_action.setText(self.t("save_call"))
         self.import_workspace_action.setText(self.t("import_workspace"))
         self.export_workspace_action.setText(self.t("export_workspace"))
@@ -722,6 +738,7 @@ class RestClientWindow(QMainWindow):
         self._set_request_body(call.body, str(self.body_type_combo.currentData() or "raw"))
         self.timeout_spin.setValue(float(call.timeout))
         self.follow_redirects_check.setChecked(bool(call.follow_redirects))
+        self.verify_rest_call.setChecked(bool(call.verify))
         self.retry_count_spin.setValue(int(call.retry_count))
         self.retry_statuses_input.setText(call.retry_statuses)
         self.use_session_cookies_check.setChecked(bool(call.use_session_cookies))
@@ -765,6 +782,7 @@ class RestClientWindow(QMainWindow):
             headers.setdefault("Content-Type", "application/json; charset=utf-8")
         elif body.strip() and body_type == "form":
             headers.setdefault("Content-Type", "application/x-www-form-urlencoded")
+
         call = RestCall(
             name=self.name_input.text().strip() or "Nuova chiamata",
             method=self.method_combo.currentText(),
@@ -774,6 +792,7 @@ class RestClientWindow(QMainWindow):
             query_params=query_params,
             body=body,
             body_type=body_type,
+            verify=self.verify_rest_call.isChecked(),
             timeout=float(self.timeout_spin.value()),
             follow_redirects=self.follow_redirects_check.isChecked(),
             retry_count=int(self.retry_count_spin.value()),
@@ -804,6 +823,7 @@ class RestClientWindow(QMainWindow):
             self.calls[index] = updated_call
 
         save_collection(self.calls)
+        self._notify_workflow_calls_changed()
         self._populate_call_list()
         self._select_call(updated_call.id)
         self.statusBar().showMessage(self.t("request_saved"), 2500)
@@ -820,6 +840,7 @@ class RestClientWindow(QMainWindow):
             save_folders(self.folders)
         self.calls.append(call)
         save_collection(self.calls)
+        self._notify_workflow_calls_changed()
         self._populate_call_list()
         self._select_call(call.id)
         self.sidebar_tabs.setCurrentIndex(0)
@@ -839,6 +860,80 @@ class RestClientWindow(QMainWindow):
         self._populate_call_list()
         self._select_folder(folder_name)
         self.sidebar_tabs.setCurrentIndex(0)
+
+    def _show_tree_context_menu(self, position) -> None:
+        """Show a right-click context menu on the collection tree."""
+        item = self.collection_tree.itemAt(position)
+        if item is None:
+            return
+
+        metadata = item.data(0, Qt.ItemDataRole.UserRole)
+        if not isinstance(metadata, dict):
+            return
+
+        from PyQt6.QtWidgets import QMenu
+        menu = QMenu(self)
+
+        if metadata.get("type") == "folder":
+            folder_name = str(metadata.get("name") or "")
+            if folder_name != DEFAULT_COLLECTION:
+                rename_action = menu.addAction(self.t("rename_folder"))
+                delete_action = menu.addAction(self.t("delete"))
+                chosen = menu.exec(self.collection_tree.viewport().mapToGlobal(position))
+                if chosen == rename_action:
+                    self._rename_folder_dialog(folder_name)
+                elif chosen == delete_action:
+                    self.collection_tree.setCurrentItem(item)
+                    self._delete_call()
+        elif metadata.get("type") == "call":
+            self.collection_tree.setCurrentItem(item)
+            duplicate_action = menu.addAction(self.t("duplicate"))
+            delete_action = menu.addAction(self.t("delete"))
+            chosen = menu.exec(self.collection_tree.viewport().mapToGlobal(position))
+            if chosen == duplicate_action:
+                self._duplicate_call()
+            elif chosen == delete_action:
+                self._delete_call()
+
+    def _rename_folder_via_menu(self) -> None:
+        """Rename the currently selected folder from the menu bar action."""
+        item = self.collection_tree.currentItem()
+        if item is None:
+            return
+        metadata = item.data(0, Qt.ItemDataRole.UserRole)
+        if not isinstance(metadata, dict) or metadata.get("type") != "folder":
+            return
+        old_name = str(metadata.get("name") or "")
+        if old_name == DEFAULT_COLLECTION:
+            return
+        self._rename_folder_dialog(old_name)
+
+    def _rename_folder_dialog(self, old_name: str) -> None:
+        """Show a dialog to rename a folder."""
+        new_name, accepted = QInputDialog.getText(
+            self, self.t("rename_folder"), self.t("new_folder_label"), text=old_name
+        )
+        new_name = new_name.strip()
+        if not accepted or not new_name or new_name == old_name:
+            return
+        if new_name in self._collection_names():
+            QMessageBox.information(self, self.t("existing_folder_title"), self.t("existing_folder_message"))
+            return
+        self._apply_folder_rename(old_name, new_name)
+
+    def _apply_folder_rename(self, old_name: str, new_name: str) -> None:
+        """Rename a folder, updating all calls and persisting the change."""
+        # Update folder list
+        self.folders = [new_name if f == old_name else f for f in self.folders]
+        save_folders(self.folders)
+        # Update all calls belonging to the old folder
+        for call in self.calls:
+            if call.collection == old_name:
+                call.collection = new_name
+        save_collection(self.calls)
+        self._notify_workflow_calls_changed()
+        self._populate_call_list()
+        self._select_folder(new_name)
 
     def _duplicate_call(self) -> None:
         call = self._selected_call()
@@ -873,6 +968,7 @@ class RestClientWindow(QMainWindow):
             save_folders(self.folders)
         self.calls.append(duplicated)
         save_collection(self.calls)
+        self._notify_workflow_calls_changed()
         self._populate_call_list()
         self._select_call(duplicated.id)
         self.sidebar_tabs.setCurrentIndex(0)
@@ -897,6 +993,7 @@ class RestClientWindow(QMainWindow):
             self.folders = [item for item in self.folders if item != folder_name]
             save_folders(self.folders)
             save_collection(self.calls)
+            self._notify_workflow_calls_changed()
             self._populate_call_list()
             if self.calls:
                 self._select_call(self.calls[0].id)
@@ -913,6 +1010,7 @@ class RestClientWindow(QMainWindow):
 
         self.calls = [item for item in self.calls if item.id != call.id]
         save_collection(self.calls)
+        self._notify_workflow_calls_changed()
         self._populate_call_list()
         if self.calls:
             self._select_call(self.calls[0].id)
@@ -936,8 +1034,31 @@ class RestClientWindow(QMainWindow):
         self.statusBar().showMessage(self.t("history_cleared"), 2500)
 
     def _open_workflow_dialog(self) -> None:
+        if self._workflow_dialog is not None and self._workflow_dialog.isVisible():
+            self._workflow_dialog.raise_()
+            self._workflow_dialog.activateWindow()
+            return
         dialog = WorkflowDialog(self.calls, self.translator, self)
-        dialog.exec()
+        dialog.navigate_to_call.connect(self._navigate_to_call_from_workflow)
+        dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+        dialog.destroyed.connect(self._on_workflow_dialog_closed)
+        self._workflow_dialog = dialog
+        dialog.show()
+
+    def _on_workflow_dialog_closed(self) -> None:
+        self._workflow_dialog = None
+
+    def _navigate_to_call_from_workflow(self, call_id: str) -> None:
+        """Bring main window to front and select the call from a workflow step."""
+        self.raise_()
+        self.activateWindow()
+        self.sidebar_tabs.setCurrentIndex(0)
+        self._select_call(call_id)
+
+    def _notify_workflow_calls_changed(self) -> None:
+        """Refresh the calls list in the open workflow dialog, if any."""
+        if self._workflow_dialog is not None and self._workflow_dialog.isVisible():
+            self._workflow_dialog.refresh_calls(self.calls)
 
     def _open_settings_dialog(self) -> None:
         dialog = SettingsDialog(self.translator, self)
@@ -1004,6 +1125,7 @@ class RestClientWindow(QMainWindow):
         self.folders = folders or [DEFAULT_COLLECTION]
         self.history = history[:HISTORY_LIMIT]
         save_collection(self.calls)
+        self._notify_workflow_calls_changed()
         save_folders(self.folders)
         save_history(self.history)
         save_workflows(workflows)
@@ -1043,6 +1165,7 @@ class RestClientWindow(QMainWindow):
             save_folders(self.folders)
         self.calls.extend(calls)
         save_collection(self.calls)
+        self._notify_workflow_calls_changed()
         self._populate_call_list()
         self._select_call(calls[0].id)
         self.sidebar_tabs.setCurrentIndex(0)
@@ -1560,6 +1683,16 @@ class RestClientWindow(QMainWindow):
         with open(path, "w", encoding="utf-8") as file:
             file.write(self.response_raw.toPlainText() or self.response_body.toPlainText())
         self._show_toast(self.t("save_response"), "success")
+
+    def _copy_selected_json_path(self) -> None:
+        item = self.response_json_tree.currentItem()
+        if item is None:
+            return
+        path = str(item.data(0, Qt.ItemDataRole.UserRole) or "")
+        if not path:
+            return
+        QApplication.clipboard().setText(path)
+        self._show_toast(self.t("copy_path"), "success")
 
     def _populate_json_tree(self, body: str) -> None:
         self.response_json_tree.clear()

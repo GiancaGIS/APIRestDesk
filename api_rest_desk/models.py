@@ -29,6 +29,7 @@ class RestCall:
     auth_key_name: str = ""
     auth_key_value: str = ""
     auth_key_location: str = "header"
+    verify: bool = True
     timeout: float = 30.0
     follow_redirects: bool = True
     retry_count: int = 0
@@ -59,6 +60,7 @@ class RestCall:
             auth_key_name=str(data.get("auth_key_name") or ""),
             auth_key_value=str(data.get("auth_key_value") or ""),
             auth_key_location=str(data.get("auth_key_location") or "header"),
+            verify=bool(data.get("verify")),
             timeout=float(data.get("timeout") if isinstance(data.get("timeout"), (int, float)) else 30.0),
             follow_redirects=bool(data.get("follow_redirects", True)),
             retry_count=int(data.get("retry_count") if isinstance(data.get("retry_count"), int) else 0),
