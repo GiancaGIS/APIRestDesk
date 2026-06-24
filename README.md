@@ -244,3 +244,7 @@ json data.items[0].id == 10
 ```
 
 Assertions run after the response arrives. Results are shown in the response `Tests` tab and saved in history.
+
+## Disclaimer
+
+The software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
