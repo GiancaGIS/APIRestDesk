@@ -2,8 +2,6 @@
 
 APIRestDesk is a PyQt6 desktop REST client for collecting, testing, saving, and composing REST calls. It is designed as a lightweight tool with local persistence, request history, authentication helpers, and visual workflow composition.
 
-Current version: **1.0.0**
-
 ## Screenshots
 
 ### Main Window
