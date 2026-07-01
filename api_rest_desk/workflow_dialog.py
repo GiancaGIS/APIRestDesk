@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QComboBox,
     QCheckBox,
@@ -37,6 +37,8 @@ from api_rest_desk.workers import WorkflowWorker
 
 
 class WorkflowDialog(QDialog):
+    navigate_to_call = pyqtSignal(str)
+
     def __init__(
         self,
         calls: list[RestCall],

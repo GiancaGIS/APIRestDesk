@@ -1035,6 +1035,11 @@ class RestClientWindow(QMainWindow):
 
     def _open_workflow_dialog(self) -> None:
         if self._workflow_dialog is not None and self._workflow_dialog.isVisible():
+            if self._workflow_dialog.isMinimized():
+                self._workflow_dialog.setWindowState(
+                    self._workflow_dialog.windowState()
+                    & ~Qt.WindowState.WindowMinimized
+                )
             self._workflow_dialog.raise_()
             self._workflow_dialog.activateWindow()
             return
