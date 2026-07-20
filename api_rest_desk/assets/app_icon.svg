@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="APIRestDesk icon">
+  <defs>
+    <linearGradient id="base" x1="168" y1="96" x2="856" y2="928" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0f766e"/>
+      <stop offset="0.52" stop-color="#0b5f65"/>
+      <stop offset="1" stop-color="#102a43"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="286" y1="272" x2="738" y2="724" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e6f4f1"/>
+    </linearGradient>
+    <linearGradient id="chrome" x1="286" y1="250" x2="738" y2="368" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1f2933"/>
+      <stop offset="1" stop-color="#0b1720"/>
+    </linearGradient>
+    <linearGradient id="green" x1="268" y1="356" x2="786" y2="704" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9be15d"/>
+      <stop offset="1" stop-color="#18a058"/>
+    </linearGradient>
+    <linearGradient id="cyan" x1="228" y1="192" x2="824" y2="760" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#5eead4"/>
+      <stop offset="1" stop-color="#0891b2"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="150%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="28" stdDeviation="28" flood-color="#071923" flood-opacity="0.36"/>
+    </filter>
+    <filter id="smallShadow" x="-30%" y="-30%" width="160%" height="160%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="9" flood-color="#071923" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+
+  <rect x="64" y="64" width="896" height="896" rx="214" fill="url(#base)"/>
+  <path d="M188 294c0-58 47-105 105-105h438c58 0 105 47 105 105v438c0 58-47 105-105 105H293c-58 0-105-47-105-105V294z" fill="#0e7c78" opacity="0.36"/>
+  <path d="M178 292c0-63 51-114 114-114h440c63 0 114 51 114 114v440c0 63-51 114-114 114H292c-63 0-114-51-114-114V292z" fill="none" stroke="#7dd3c7" stroke-width="14" opacity="0.46"/>
+
+  <g filter="url(#smallShadow)">
+    <path d="M241 716h542c30 0 54 24 54 54v13H187v-13c0-30 24-54 54-54z" fill="#f8fafc"/>
+    <path d="M256 783h512v53c0 24-19 43-43 43H299c-24 0-43-19-43-43v-53z" fill="#17222c"/>
+  </g>
+
+  <g filter="url(#softShadow)">
+    <rect x="275" y="248" width="474" height="431" rx="72" fill="url(#panel)"/>
+    <path d="M275 320c0-40 32-72 72-72h330c40 0 72 32 72 72v54H275v-54z" fill="url(#chrome)"/>
+    <circle cx="342" cy="312" r="18" fill="#8bd84f"/>
+    <circle cx="395" cy="312" r="18" fill="#37d2c7"/>
+    <circle cx="448" cy="312" r="18" fill="#70808f"/>
+
+    <rect x="350" y="438" width="190" height="30" rx="15" fill="#0f766e"/>
+    <rect x="350" y="504" width="132" height="30" rx="15" fill="#13a36f"/>
+    <rect x="350" y="570" width="172" height="30" rx="15" fill="#9caeb8"/>
+    <rect x="350" y="636" width="116" height="30" rx="15" fill="#72c444"/>
+
+    <rect x="568" y="430" width="5" height="214" rx="3" fill="#bac8cf"/>
+
+    <path d="M630 486h95l-39-39c-10-10-10-27 0-37 10-10 27-10 37 0l84 84c10 10 10 27 0 37l-84 84c-10 10-27 10-37 0-10-10-10-27 0-37l39-39h-95c-15 0-27-12-27-27s12-26 27-26z" fill="url(#cyan)"/>
+    <path d="M724 608h-95l39 39c10 10 10 27 0 37-10 10-27 10-37 0l-84-84c-10-10-10-27 0-37l84-84c10-10 27-10 37 0 10 10 10 27 0 37l-39 39h95c15 0 27 12 27 27s-12 26-27 26z" fill="url(#green)"/>
+  </g>
+
+  <g fill="#dffcf7" opacity="0.95" filter="url(#smallShadow)">
+    <circle cx="246" cy="374" r="24"/>
+    <circle cx="202" cy="476" r="18"/>
+    <circle cx="218" cy="583" r="16"/>
+    <circle cx="778" cy="374" r="24"/>
+    <circle cx="822" cy="476" r="18"/>
+    <circle cx="806" cy="583" r="16"/>
+  </g>
+
+  <path d="M246 374c78-94 184-142 266-142s188 48 266 142" fill="none" stroke="#dffcf7" stroke-width="24" stroke-linecap="round" opacity="0.92"/>
+  <path d="M512 232v97" fill="none" stroke="#dffcf7" stroke-width="20" stroke-linecap="round" opacity="0.92"/>
+  <circle cx="512" cy="232" r="54" fill="url(#green)" filter="url(#smallShadow)"/>
+</svg>

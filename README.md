@@ -113,7 +113,13 @@ Automatic mapping does not overwrite non-empty parameter values. Manually config
 
 ## Local Data Files
 
-Data is stored as JSON files in the project root:
+During development, data is stored as JSON files in the project root. In packaged builds, data is stored in the current user's application data folder:
+
+- Windows: `%APPDATA%\APIRestDesk`
+- macOS: `~/Library/Application Support/APIRestDesk`
+- Linux: `$XDG_DATA_HOME/APIRestDesk` or `~/.local/share/APIRestDesk`
+
+The data files are:
 
 - `rest_client_collection.json`: saved request collection.
 - `rest_client_folders.json`: collection folders.
@@ -172,7 +178,7 @@ Installed entry point:
 The project includes a `pyproject.toml` with:
 
 - package name: `api-rest-desk`
-- version: `1.0.0`
+- version: `1.0.3`
 - dependencies: `PyQt6`, `httpx`
 - entry point: `api-rest-desk = api_rest_desk.__main__:main`
 
@@ -182,6 +188,46 @@ Build a Python distribution:
 .\.venv\Scripts\python.exe -m pip install build
 .\.venv\Scripts\python.exe -m build
 ```
+
+### Desktop App And Installers
+
+The application icon source is `api_rest_desk/assets/app_icon.svg`. The `png`, `ico`, and `icns` files in the same folder are generated from that vector source for runtime, Windows, and macOS packaging.
+
+Install the packaging dependencies:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[packaging]"
+```
+
+Build the Windows app folder and Inno Setup installer:
+
+```powershell
+.\scripts\build_windows.bat
+```
+
+The Windows script writes:
+
+- `dist\APIRestDesk\APIRestDesk.exe`
+- `dist\installer\APIRestDesk-1.0.3-Setup.exe`
+
+The Inno Setup wizard supports both install modes:
+
+- all users, under `C:\Program Files\APIRestDesk` when elevated;
+- current user, under the user's profile when not elevated.
+
+Build only the PyInstaller app folder without Inno Setup:
+
+```powershell
+.\scripts\build_windows.bat --skip-installer
+```
+
+Build the macOS `.app` bundle on macOS:
+
+```bash
+bash scripts/build_macos.sh
+```
+
+The macOS script writes `dist/APIRestDesk.app`.
 
 ## Project Structure
 
