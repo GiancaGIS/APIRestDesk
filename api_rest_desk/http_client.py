@@ -56,7 +56,7 @@ class RestClient:
         """
         headers = dict(call.headers)
         headers.setdefault("User-Agent", f"PyQt {APP_NAME.split(' ')[0]}/0.1")
-        params: dict[str, str] = dict(call.query_params)
+        params = call.active_query_params()
         auth: tuple[str, str] | None = None
         retry_statuses = self._parse_retry_statuses(call.retry_statuses)
         attempts = max(1, int(call.retry_count) + 1)

@@ -230,7 +230,7 @@ class RestClientWindow(QMainWindow):
         request_tabs = QTabWidget()
         self.headers_editor = HeaderEditor()
         self.auth_editor = AuthEditor()
-        self.params_editor = KeyValueEditor()
+        self.params_editor = KeyValueEditor(checkable=True)
         self.body_editor = QPlainTextEdit()
         self.body_editor.setPlaceholderText('{\n  "name": "Mario"\n}')
         self.form_body_editor = KeyValueEditor()
@@ -733,7 +733,7 @@ class RestClientWindow(QMainWindow):
         self.url_input.setText(call.url)
         self.headers_editor.set_headers(call.headers)
         self.auth_editor.set_auth(call)
-        self.params_editor.set_values(call.query_params)
+        self.params_editor.set_values(call.query_params, call.disabled_query_params)
         self._set_body_type(call.body_type, call.headers)
         self._set_request_body(call.body, str(self.body_type_combo.currentData() or "raw"))
         self.timeout_spin.setValue(float(call.timeout))
@@ -776,6 +776,7 @@ class RestClientWindow(QMainWindow):
     def _read_call_from_ui(self, call_id: str | None = None) -> RestCall:
         headers = self.headers_editor.headers()
         query_params = self.params_editor.values()
+        disabled_query_params = self.params_editor.disabled_keys()
         body_type = str(self.body_type_combo.currentData() or "raw")
         body = self._request_body_from_ui(body_type)
         if body.strip() and body_type == "json":
@@ -790,6 +791,7 @@ class RestClientWindow(QMainWindow):
             collection=self._selected_collection_name(),
             headers=headers,
             query_params=query_params,
+            disabled_query_params=disabled_query_params,
             body=body,
             body_type=body_type,
             verify=self.verify_rest_call.isChecked(),
@@ -947,6 +949,7 @@ class RestClientWindow(QMainWindow):
             collection=call.collection,
             headers=dict(call.headers),
             query_params=dict(call.query_params),
+            disabled_query_params=list(call.disabled_query_params),
             body=call.body,
             body_type=call.body_type,
             auth_type=call.auth_type,
@@ -1201,9 +1204,10 @@ class RestClientWindow(QMainWindow):
         if not query_values:
             return
 
+        disabled = self.params_editor.disabled_keys()
         merged = self.params_editor.values()
         merged.update(query_values)
-        self.params_editor.set_values(merged)
+        self.params_editor.set_values(merged, disabled)
         clean_url = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", parsed.fragment))
         self.url_input.setText(clean_url)
         self.request_tabs.setCurrentWidget(self.params_editor)
@@ -1245,7 +1249,7 @@ class RestClientWindow(QMainWindow):
         self.url_input.setText(call.url)
         self.headers_editor.set_headers(call.headers)
         self.auth_editor.set_auth(call)
-        self.params_editor.set_values(call.query_params)
+        self.params_editor.set_values(call.query_params, call.disabled_query_params)
         self._set_body_type(call.body_type, call.headers)
         self._set_request_body(call.body, str(self.body_type_combo.currentData() or "raw"))
         self.timeout_spin.setValue(float(call.timeout))
@@ -1538,7 +1542,7 @@ class RestClientWindow(QMainWindow):
     @staticmethod
     def _request_parts_for_export(call: RestCall) -> tuple[dict[str, str], dict[str, str]]:
         headers = dict(call.headers)
-        params = dict(call.query_params)
+        params = call.active_query_params()
         if call.auth_type == "bearer" and call.auth_token:
             headers["Authorization"] = f"Bearer {call.auth_token}"
         elif call.auth_type == "api_key" and call.auth_key_name and call.auth_key_value:
@@ -1877,7 +1881,7 @@ class RestClientWindow(QMainWindow):
             method=call.method,
             url=call.url,
             request_headers=dict(call.headers),
-            request_query_params=dict(call.query_params),
+            request_query_params=call.active_query_params(),
             request_body=call.body,
             request_body_type=call.body_type,
             request_timeout=call.timeout,

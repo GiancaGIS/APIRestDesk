@@ -1,6 +1,6 @@
 #define MyAppName "APIRestDesk"
-#define MyAppVersion "1.0.3"
-#define MyAppVersionInfo "1.0.3.0"
+#define MyAppVersion "1.0.4"
+#define MyAppVersionInfo "1.0.4.0"
 #define MyAppPublisher "GiancaGIS"
 #define MyAppExeName "APIRestDesk.exe"
 

@@ -20,6 +20,7 @@ class RestCall:
     collection: str = "Generale"
     headers: dict[str, str] = field(default_factory=dict)
     query_params: dict[str, str] = field(default_factory=dict)
+    disabled_query_params: list[str] = field(default_factory=list)
     body: str = ""
     body_type: str = "raw"
     auth_type: str = "none"
@@ -43,6 +44,9 @@ class RestCall:
         """Deserialize a :class:`RestCall` from a plain dictionary
         (typically loaded from JSON storage).
         """
+        disabled_query_params = data.get("disabled_query_params", [])
+        if not isinstance(disabled_query_params, list):
+            disabled_query_params = []
         return cls(
             id=str(data.get("id") or uuid.uuid4().hex),
             name=str(data.get("name") or "Nuova chiamata"),
@@ -51,6 +55,7 @@ class RestCall:
             collection=str(data.get("collection") or "Generale"),
             headers=dict(data.get("headers") or {}),
             query_params=dict(data.get("query_params") or {}),
+            disabled_query_params=[str(name) for name in disabled_query_params if str(name)],
             body=str(data.get("body") or ""),
             body_type=str(data.get("body_type") or "raw"),
             auth_type=str(data.get("auth_type") or "none"),
@@ -68,6 +73,15 @@ class RestCall:
             use_session_cookies=bool(data.get("use_session_cookies", False)),
             assertions=str(data.get("assertions") or ""),
         )
+
+    def active_query_params(self) -> dict[str, str]:
+        """Return only query parameters enabled for request execution."""
+        disabled = set(self.disabled_query_params)
+        return {
+            name: value
+            for name, value in self.query_params.items()
+            if name not in disabled
+        }
 
 
 @dataclass

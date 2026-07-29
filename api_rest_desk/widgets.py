@@ -4,6 +4,7 @@ from api_rest_desk.exceptions import HeaderParseError
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QCompleter,
     QFormLayout,
@@ -135,25 +136,41 @@ class HeaderEditor(QWidget):
 
 
 class KeyValueEditor(QWidget):
-    """Generic two-column table editor for key-value pairs
-    (used for query params and form body fields).
+    """Generic table editor for key-value pairs.
+
+    Query params can optionally include an enable checkbox per row.
     """
 
-    def __init__(self, key_label: str = "Key", value_label: str = "Value") -> None:
+    def __init__(
+        self,
+        key_label: str = "Key",
+        value_label: str = "Value",
+        checkable: bool = False,
+    ) -> None:
         super().__init__()
         self.translator = Translator()
         self.key_label = key_label
         self.value_label = value_label
+        self.checkable = checkable
+        self._key_column = 1 if checkable else 0
+        self._value_column = 2 if checkable else 1
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
 
-        self.table = QTableWidget(0, 2)
-        self.table.setHorizontalHeaderLabels((self.key_label, self.value_label))
+        self.table = QTableWidget(0, 3 if checkable else 2)
+        self._set_header_labels()
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setDefaultSectionSize(42)
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        if checkable:
+            self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+            self.table.setColumnWidth(0, 42)
+        self.table.horizontalHeader().setSectionResizeMode(
+            self._key_column, QHeaderView.ResizeMode.ResizeToContents
+        )
+        self.table.horizontalHeader().setSectionResizeMode(
+            self._value_column, QHeaderView.ResizeMode.Stretch
+        )
         self.table.setAlternatingRowColors(True)
         layout.addWidget(self.table, 1)
 
@@ -172,22 +189,30 @@ class KeyValueEditor(QWidget):
         self.translator = translator
         self.key_label = key_label or self.key_label
         self.value_label = value_label or self.value_label
-        self.table.setHorizontalHeaderLabels((self.key_label, self.value_label))
+        self._set_header_labels()
         self.add_button.setText(translator.t("add"))
         self.remove_button.setText(translator.t("remove"))
         for row in range(self.table.rowCount()):
-            key_widget = self.table.cellWidget(row, 0)
-            value_widget = self.table.cellWidget(row, 1)
+            enabled_widget = self.table.cellWidget(row, 0)
+            key_widget = self.table.cellWidget(row, self._key_column)
+            value_widget = self.table.cellWidget(row, self._value_column)
+            if self.checkable and isinstance(enabled_widget, QCheckBox):
+                enabled_widget.setToolTip(translator.t("enabled"))
             if isinstance(key_widget, QLineEdit):
                 key_widget.setPlaceholderText(self.key_label)
             if isinstance(value_widget, QLineEdit):
                 value_widget.setPlaceholderText(self.value_label)
 
-    def set_values(self, values: dict[str, str]) -> None:
+    def set_values(
+        self,
+        values: dict[str, str],
+        disabled_keys: list[str] | set[str] | None = None,
+    ) -> None:
         """Replace the table contents with the given key-value dictionary."""
+        disabled = set(disabled_keys or [])
         self.table.setRowCount(0)
         for key, value in values.items():
-            self.add_row(key, value)
+            self.add_row(key, value, enabled=key not in disabled)
         if not values:
             self.add_row()
 
@@ -195,8 +220,8 @@ class KeyValueEditor(QWidget):
         """Read all key-value rows from the table and return them as a dictionary."""
         parsed: dict[str, str] = {}
         for row in range(self.table.rowCount()):
-            key_widget = self.table.cellWidget(row, 0)
-            value_widget = self.table.cellWidget(row, 1)
+            key_widget = self.table.cellWidget(row, self._key_column)
+            value_widget = self.table.cellWidget(row, self._value_column)
             if not isinstance(key_widget, QLineEdit) or not isinstance(value_widget, QLineEdit):
                 continue
             key = key_widget.text().strip()
@@ -204,11 +229,28 @@ class KeyValueEditor(QWidget):
             if not key and not value:
                 continue
             if not key:
+                if self.checkable and not self._row_is_enabled(row):
+                    continue
                 raise ValueError(f"Riga {row + 1}: inserisci il nome del parametro.")
             parsed[key] = value
         return parsed
 
-    def add_row(self, key: str = "", value: str = "") -> None:
+    def disabled_keys(self) -> list[str]:
+        """Return the named rows whose checkbox is turned off."""
+        if not self.checkable:
+            return []
+        disabled: list[str] = []
+        for row in range(self.table.rowCount()):
+            key_widget = self.table.cellWidget(row, self._key_column)
+            if (
+                isinstance(key_widget, QLineEdit)
+                and key_widget.text().strip()
+                and not self._row_is_enabled(row)
+            ):
+                disabled.append(key_widget.text().strip())
+        return disabled
+
+    def add_row(self, key: str = "", value: str = "", enabled: bool = True) -> None:
         row = self.table.rowCount()
         self.table.insertRow(row)
 
@@ -219,8 +261,40 @@ class KeyValueEditor(QWidget):
         value_input.setPlaceholderText(self.value_label)
         value_input.setMinimumHeight(32)
 
-        self.table.setCellWidget(row, 0, key_input)
-        self.table.setCellWidget(row, 1, value_input)
+        if self.checkable:
+            enabled_check = QCheckBox()
+            enabled_check.setChecked(enabled)
+            enabled_check.setToolTip(self.translator.t("enabled"))
+            enabled_check.setStyleSheet("QCheckBox { margin-left: 11px; }")
+            enabled_check.toggled.connect(
+                lambda checked, key=key_input, value=value_input: self._set_inputs_enabled(
+                    key, value, checked
+                )
+            )
+            self.table.setCellWidget(row, 0, enabled_check)
+            self._set_inputs_enabled(key_input, value_input, enabled)
+
+        self.table.setCellWidget(row, self._key_column, key_input)
+        self.table.setCellWidget(row, self._value_column, value_input)
+
+    def _set_header_labels(self) -> None:
+        labels = (self.key_label, self.value_label)
+        if self.checkable:
+            labels = ("", *labels)
+        self.table.setHorizontalHeaderLabels(labels)
+
+    def _row_is_enabled(self, row: int) -> bool:
+        checkbox = self.table.cellWidget(row, 0)
+        return not isinstance(checkbox, QCheckBox) or checkbox.isChecked()
+
+    @staticmethod
+    def _set_inputs_enabled(
+        key_input: QLineEdit,
+        value_input: QLineEdit,
+        enabled: bool,
+    ) -> None:
+        key_input.setEnabled(enabled)
+        value_input.setEnabled(enabled)
 
     def remove_selected_rows(self) -> None:
         selected_rows = sorted({index.row() for index in self.table.selectedIndexes()}, reverse=True)

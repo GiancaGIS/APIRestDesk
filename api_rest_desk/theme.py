@@ -226,6 +226,11 @@ QListWidget, QTreeWidget, QPlainTextEdit, QLineEdit, QComboBox, QTableWidget {
 QLineEdit, QComboBox {
     padding: 8px;
 }
+QLineEdit:disabled {
+    background: $light_silver;
+    border-color: $silver_gray;
+    color: $cool_gray;
+}
 QPlainTextEdit {
     padding: 8px;
 }
@@ -452,6 +457,11 @@ QListWidget, QTreeWidget, QPlainTextEdit, QLineEdit, QComboBox, QTableWidget {
 }
 QLineEdit, QComboBox {
     padding: 8px;
+}
+QLineEdit:disabled {
+    background: $dark_charcoal;
+    border-color: $dark_gunmetal;
+    color: $slate_gray;
 }
 QPlainTextEdit {
     padding: 8px;

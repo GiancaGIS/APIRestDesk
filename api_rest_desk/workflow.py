@@ -174,7 +174,11 @@ class WorkflowRunner:
         )
         if not auto_map_params:
             return rendered, {}
-        auto_params = self._auto_fill_query_params(rendered.query_params, auto_candidates)
+        auto_params = self._auto_fill_query_params(
+            rendered.query_params,
+            auto_candidates,
+            rendered.disabled_query_params,
+        )
         return rendered, auto_params
 
     def _render_call(
@@ -195,6 +199,10 @@ class WorkflowRunner:
         rendered.auth_token = self._render_text(rendered.auth_token, variables, candidates)
         rendered.auth_key_name = self._render_text(rendered.auth_key_name, variables, candidates)
         rendered.auth_key_value = self._render_text(rendered.auth_key_value, variables, candidates)
+        rendered.disabled_query_params = [
+            self._render_text(name, variables, candidates)
+            for name in rendered.disabled_query_params
+        ]
         rendered.query_params = {
             self._render_text(name, variables, candidates): self._render_text(value, variables, candidates)
             for name, value in rendered.query_params.items()
@@ -231,13 +239,17 @@ class WorkflowRunner:
         self,
         query_params: dict[str, str],
         auto_candidates: list[AutoParamCandidate],
+        disabled_query_params: list[str] | None = None,
     ) -> dict[str, Any]:
         """Fill blank query params from previous JSON response fields."""
         auto_params: dict[str, Any] = {}
         if not auto_candidates:
             return auto_params
 
+        disabled = set(disabled_query_params or [])
         for param_name, current_value in list(query_params.items()):
+            if param_name in disabled:
+                continue
             if str(current_value).strip():
                 continue
             candidate = self._best_auto_candidate(param_name, auto_candidates)

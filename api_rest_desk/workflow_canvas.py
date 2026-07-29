@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
+from api_rest_desk.exceptions import ExtractorParseError
 from api_rest_desk.i18n import Translator
 from api_rest_desk.models import RestCall, WorkflowStep
 from api_rest_desk.settings import load_settings
@@ -644,7 +645,7 @@ class WorkflowCanvas(QWidget):
         node.step.call_id = str(self.call_combo.currentData() or "")
         try:
             node.step.extractors = parse_extractors(self.extractors_edit.toPlainText())
-        except ValueError:
+        except (ValueError, ExtractorParseError):
             pass
         node.setToolTip(node._build_tooltip())
         node.update()
