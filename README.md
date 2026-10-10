@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <strong>Your desktop workspace for REST APIs.</strong><br />
+  <strong>A simple desktop workspace for REST APIs.</strong><br />
   Requests · Environments · Visual workflows
 </p>
 
