@@ -1,6 +1,0 @@
-Original files from https://github.com/tukaani-project/xz/archive/refs/tags/v5.2.5.tar.gz
-
-copying-bc9733192c84.txt	xz-5.2.5/COPYING
-copying.gplv2-cdf35e2694e5.txt	xz-5.2.5/COPYING.GPLv2
-copying.gplv3-f1dc9f56a87a.txt	xz-5.2.5/COPYING.GPLv3
-copying.lgplv2.1-de9fa397fbf8.txt	xz-5.2.5/COPYING.LGPLv2.1

@@ -1,9 +1,0 @@
-Original files from https://www.python.org/ftp/python/3.14.5/Python-3.14.5.tar.xz
-
-copying-f8ffb8452a59.txt	Python-3.14.5/Modules/expat/COPYING
-copyright.rst-8994dee775d4.txt	Python-3.14.5/Doc/copyright.rst
-crtlicense.txt-0e08036a116f.txt	Python-3.14.5/PC/crtlicense.txt
-license-fe9ceceaa24e.txt	Python-3.14.5/LICENSE
-license.rst-294e038c577c.txt	Python-3.14.5/Doc/license.rst
-license.rtf-223490098367.txt	Python-3.14.5/Mac/BuildScript/resources/License.rtf
-license.txt-4226d4ecccee.txt	Python-3.14.5/Tools/msi/bundle/bootstrap/LICENSE.txt

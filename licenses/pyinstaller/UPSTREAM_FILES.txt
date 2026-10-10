@@ -1,7 +1,0 @@
-Original files from https://files.pythonhosted.org/packages/d5/4d/ec706c3fcf39e26888c35b39615ff4d5865d184069666c47492cff1fbe50/pyinstaller-6.21.0.tar.gz
-
-copying.txt-e539cc4e0586.txt	pyinstaller-6.21.0/COPYING.txt
-license-e79c379c7956.txt	pyinstaller-6.21.0/bootloader/waflib/LICENSE
-license-efa07cf24612.txt	pyinstaller-6.21.0/bootloader/zlib/LICENSE
-license.rst-c61489cf30db.txt	pyinstaller-6.21.0/doc/license.rst
-update-copyright-e0ac984ef000.txt	pyinstaller-6.21.0/scripts/update-copyright

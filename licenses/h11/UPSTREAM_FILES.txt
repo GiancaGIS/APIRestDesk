@@ -1,3 +1,0 @@
-Original files from https://files.pythonhosted.org/packages/01/ee/02a2c011bdab74c6fb3c75474d40b3052059d95df7e73351460c8588d963/h11-0.16.0.tar.gz
-
-license.txt-6571ce71a8e4.txt	h11-0.16.0/LICENSE.txt

@@ -3,6 +3,7 @@
 /__pycache__
 *.pyc
 /dist
+/licenses
 *.json
 /build
 /api_rest_desk/legal/licenses

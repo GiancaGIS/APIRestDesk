@@ -1,4 +1,0 @@
-Original files from https://github.com/openssl/openssl/releases/download/openssl-3.0.20/openssl-3.0.20.tar.gz
-
-license-218b450e296c.txt	openssl-3.0.20/external/perl/Text-Template-1.56/LICENSE
-license.txt-1fee73946334.txt	openssl-3.0.20/LICENSE.txt

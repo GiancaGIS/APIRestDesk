@@ -1,3 +1,0 @@
-Original files from https://files.pythonhosted.org/packages/90/24/a753e1af94b9ae5b2da63d4598457308da3cdbf0838c959381db086ccc86/pyqt6_sip-13.11.1.tar.gz
-
-license-e5e4811bbcf4.txt	pyqt6_sip-13.11.1/LICENSE
