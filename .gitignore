@@ -5,3 +5,5 @@
 /dist
 *.json
 /build
+/api_rest_desk/legal/licenses
+api_rest_desk/legal/licenses.zip

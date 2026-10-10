@@ -1,0 +1,14 @@
+Original files from https://download.qt.io/official_releases/qt/6.11/6.11.1/submodules/qtimageformats-everywhere-src-6.11.1.tar.xz?download
+
+bsd-3-clause.txt-60948e23b726.txt	qtimageformats-everywhere-src-6.11.1/LICENSES/BSD-3-Clause.txt
+copying-cdd55050eafd.txt	qtimageformats-everywhere-src-6.11.1/src/3rdparty/libwebp/COPYING
+copyright-ca0066d02ae8.txt	qtimageformats-everywhere-src-6.11.1/src/3rdparty/libtiff/COPYRIGHT
+gfdl-1.3-no-invariants-only.txt-9e10322257dd.txt	qtimageformats-everywhere-src-6.11.1/LICENSES/GFDL-1.3-no-invariants-only.txt
+gpl-2.0-only.txt-7a212a9e2375.txt	qtimageformats-everywhere-src-6.11.1/LICENSES/GPL-2.0-only.txt
+gpl-3.0-only.txt-c7958394d016.txt	qtimageformats-everywhere-src-6.11.1/LICENSES/GPL-3.0-only.txt
+lgpl-3.0-only.txt-86f904ce650b.txt	qtimageformats-everywhere-src-6.11.1/LICENSES/LGPL-3.0-only.txt
+libtiff.txt-3979c0d2b941.txt	qtimageformats-everywhere-src-6.11.1/LICENSES/libtiff.txt
+licenseref-qt-commercial.txt-83023d73b209.txt	qtimageformats-everywhere-src-6.11.1/LICENSES/LicenseRef-Qt-Commercial.txt
+licenserule.json-1024d6962016.txt	qtimageformats-everywhere-src-6.11.1/licenseRule.json
+qt_attribution.json-17f086207752.txt	qtimageformats-everywhere-src-6.11.1/src/3rdparty/libtiff/qt_attribution.json
+qt_attribution.json-d119b0dd1594.txt	qtimageformats-everywhere-src-6.11.1/src/3rdparty/libwebp/qt_attribution.json

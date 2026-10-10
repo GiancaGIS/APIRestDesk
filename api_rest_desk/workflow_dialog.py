@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import (
     QComboBox,
     QCheckBox,
@@ -26,6 +27,7 @@ from PyQt6.QtWidgets import (
 )
 
 from api_rest_desk.exceptions import ExtractorParseError
+from api_rest_desk.environment_selector import EnvironmentSelector
 from api_rest_desk.models import RestCall, Workflow, WorkflowStep
 from api_rest_desk.storage import StorageError, load_workflows, save_workflows
 from api_rest_desk.i18n import Translator
@@ -38,6 +40,7 @@ from api_rest_desk.workers import WorkflowWorker
 
 class WorkflowDialog(QDialog):
     navigate_to_call = pyqtSignal(str)
+    environment_changed = pyqtSignal(str)
 
     def __init__(
         self,
@@ -57,6 +60,7 @@ class WorkflowDialog(QDialog):
         self.current_worker: WorkflowWorker | None = None
         self.toast: ToastNotification | None = None
         self._active_mode = "linear"
+        self._pending_close_result: int | None = None
 
         self._build_ui()
         self._apply_style()
@@ -122,6 +126,11 @@ class WorkflowDialog(QDialog):
 
         self.auto_params_checkbox = QCheckBox()
         right_layout.addWidget(self.auto_params_checkbox)
+        self.environment_selector = EnvironmentSelector(self.translator, self)
+        self.environment_selector.environment_changed.connect(self.environment_changed.emit)
+        right_layout.addWidget(self.environment_selector)
+        self.run_progress_label = QLabel()
+        right_layout.addWidget(self.run_progress_label)
 
         self.workflow_splitter = QSplitter(Qt.Orientation.Vertical)
         right_layout.addWidget(self.workflow_splitter, 1)
@@ -184,9 +193,13 @@ class WorkflowDialog(QDialog):
         self.run_button.setObjectName("Primary")
         self.save_button.clicked.connect(self._save_current_workflow)
         self.run_button.clicked.connect(self._run_current_workflow)
+        self.cancel_button = QPushButton()
+        self.cancel_button.setEnabled(False)
+        self.cancel_button.clicked.connect(self._cancel_current_workflow)
         action_buttons.addStretch(1)
         action_buttons.addWidget(self.save_button)
         action_buttons.addWidget(self.run_button)
+        action_buttons.addWidget(self.cancel_button)
         editor_area_layout.addLayout(action_buttons)
 
         result_area = QWidget()
@@ -263,6 +276,8 @@ class WorkflowDialog(QDialog):
         self.move_down_button.setText(self.t("move_down"))
         self.save_button.setText(self.t("save_workflow"))
         self.run_button.setText(self.t("run_workflow"))
+        self.cancel_button.setText(self.t("cancel_workflow"))
+        self.environment_selector.refresh()
         self.result_title.setText(self.t("workflow_result_summary"))
         self.step_outputs_title.setText(self.t("workflow_step_outputs"))
         self.step_output_tabs.setTabText(0, self.t("body"))
@@ -459,6 +474,8 @@ class WorkflowDialog(QDialog):
         return workflow
 
     def _run_current_workflow(self) -> None:
+        if self.current_worker is not None or self._pending_close_result is not None:
+            return
         workflow = self._save_current_workflow()
         if workflow is None:
             return
@@ -469,23 +486,82 @@ class WorkflowDialog(QDialog):
             QMessageBox.information(self, self.t("workflow"), self.t("workflow_empty_message"))
             return
 
-        self.run_button.setDisabled(True)
+        self._set_running_state(True)
         self.run_button.setText(self.t("workflow_running"))
         self.output.setPlainText(self.t("workflow_running"))
         self._clear_step_outputs()
         self._update_block_statuses({"steps": []})
 
-        self.current_worker = WorkflowWorker(workflow, self.calls)
+        self.current_worker = WorkflowWorker(workflow, self.calls, parent=self)
         self.current_worker.finished_ok.connect(self._show_run_result)
         self.current_worker.failed.connect(self._show_run_error)
+        self.current_worker.cancelled.connect(self._show_run_cancelled)
+        self.current_worker.progress.connect(self._show_run_progress)
         self.current_worker.finished.connect(self._reset_run_button)
         self.current_worker.start()
 
     def _reset_run_button(self) -> None:
-        self.run_button.setDisabled(False)
+        worker = self.current_worker
+        self.current_worker = None
+        if worker is not None:
+            worker.deleteLater()
+        self._set_running_state(False)
         self.run_button.setText(self.t("run_workflow"))
+        self.cancel_button.setText(self.t("cancel_workflow"))
+        self.run_progress_label.clear()
+        if self._pending_close_result is not None:
+            super().done(self._pending_close_result)
+
+    def _set_running_state(self, running: bool) -> None:
+        for widget in (
+            self.run_button, self.save_button, self.new_button, self.delete_button,
+            self.workflow_list, self.name_input, self.mode_combo, self.auto_params_checkbox,
+            self.steps_table, self.workflow_canvas, self.add_step_button,
+            self.remove_step_button, self.move_up_button, self.move_down_button,
+            self.environment_selector,
+        ):
+            widget.setEnabled(not running)
+        self.cancel_button.setEnabled(running)
+
+    def _cancel_current_workflow(self) -> None:
+        if self.current_worker is not None:
+            self.current_worker.cancel()
+            self.cancel_button.setEnabled(False)
+            self.cancel_button.setText(self.t("cancelling"))
+
+    def _show_run_progress(self, index: int, total: int, name: str) -> None:
+        if self.current_worker is not None and not self.current_worker.cancel_requested:
+            self.run_progress_label.setText(self.t("workflow_step_running", index=index, total=total, name=name))
+
+    def _show_run_cancelled(self, result: dict) -> None:
+        message = self.t("workflow_cancelled")
+        self.output.setPlainText(message + "\n\n" + json.dumps(self._summary_result(result), indent=2, ensure_ascii=False))
+        self._populate_step_outputs(result)
+        self._update_block_statuses(result)
+        self._show_toast(message, "info")
+
+    def done(self, result: int) -> None:
+        if self.current_worker is not None:
+            self._pending_close_result = result
+            self._cancel_current_workflow()
+            return
+        super().done(result)
+
+    def reject(self) -> None:
+        self.done(QDialog.DialogCode.Rejected.value)
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        if self.current_worker is not None:
+            self._pending_close_result = QDialog.DialogCode.Rejected.value
+            self._cancel_current_workflow()
+            event.ignore()
+            return
+        super().closeEvent(event)
 
     def _show_run_result(self, result: dict) -> None:
+        if self.current_worker is not None and self.current_worker.cancel_requested:
+            self._show_run_cancelled(result)
+            return
         self.output.setPlainText(json.dumps(self._summary_result(result), indent=2, ensure_ascii=False))
         self._populate_step_outputs(result)
         self._update_block_statuses(result)
@@ -495,6 +571,9 @@ class WorkflowDialog(QDialog):
             self._show_toast(self.t("workflow_completed"), "success")
 
     def _show_run_error(self, error: str) -> None:
+        if self.current_worker is not None and self.current_worker.cancel_requested:
+            self._show_run_cancelled(self.current_worker._cancelled_result())
+            return
         self.output.setPlainText(error)
         self._clear_step_outputs()
         self._update_block_statuses({"steps": []})
@@ -503,7 +582,7 @@ class WorkflowDialog(QDialog):
     def _summary_result(self, result: dict) -> dict:
         if not isinstance(result, dict):
             return {}
-        summary = {"variables": result.get("variables", {}), "steps": []}
+        summary = {"environment": result.get("environment", ""), "variables": result.get("variables", {}), "steps": []}
         steps = result.get("steps") if isinstance(result.get("steps"), list) else []
         for step in steps:
             if not isinstance(step, dict):

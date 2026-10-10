@@ -1,0 +1,6 @@
+include LICENSE COPYRIGHT THIRD_PARTY_NOTICES.md SOURCE_CODE.md SOURCE_MANIFEST.toml
+include requirements-release.txt requirements.txt
+recursive-include licenses *
+recursive-include packaging *.spec *.iss *.toml *.md
+recursive-include scripts *.py *.bat *.sh
+recursive-include api_rest_desk/legal *

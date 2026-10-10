@@ -5,3 +5,7 @@ from importlib.resources import files
 
 def app_icon_path() -> str:
     return str(files("api_rest_desk").joinpath("assets", "app_icon.png"))
+
+
+def legal_directory() -> str:
+    return str(files("api_rest_desk").joinpath("legal"))

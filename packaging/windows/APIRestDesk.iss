@@ -1,6 +1,6 @@
 #define MyAppName "APIRestDesk"
-#define MyAppVersion "1.0.4"
-#define MyAppVersionInfo "1.0.4.0"
+#define MyAppVersion "1.0.5"
+#define MyAppVersionInfo "1.0.5.0"
 #define MyAppPublisher "GiancaGIS"
 #define MyAppExeName "APIRestDesk.exe"
 
@@ -11,7 +11,7 @@ AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
-LicenseFile=..\..\LICENSE
+InfoBeforeFile=..\..\LICENSE
 OutputDir=..\..\dist\installer
 OutputBaseFilename={#MyAppName}-{#MyAppVersion}-Setup
 SetupIconFile=..\..\api_rest_desk\assets\app_icon.ico

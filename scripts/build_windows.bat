@@ -12,13 +12,21 @@ if /I "%~1"=="--skip-installer" set "SKIP_INSTALLER=1"
 if /I "%~1"=="-SkipInstaller" set "SKIP_INSTALLER=1"
 if /I "%~1"=="/skip-installer" set "SKIP_INSTALLER=1"
 
+"%PYTHON_EXE%" -m pip install -r requirements-release.txt
+if errorlevel 1 goto :error
+
 "%PYTHON_EXE%" -m pip install --no-build-isolation -e ".[packaging]"
 if errorlevel 1 goto :error
 
-"%PYTHON_EXE%" -m PyInstaller --noconfirm packaging\pyinstaller\APIRestDesk.spec
+"%PYTHON_EXE%" scripts\prepare_licenses.py --fetch-sources
+if errorlevel 1 goto :error
+
+"%PYTHON_EXE%" -m PyInstaller --noconfirm --clean packaging\pyinstaller\APIRestDesk.spec
 if errorlevel 1 goto :error
 
 if defined SKIP_INSTALLER (
+    "%PYTHON_EXE%" scripts\prepare_release_sources.py
+    if errorlevel 1 goto :error
     echo PyInstaller build completed: dist\APIRestDesk\APIRestDesk.exe
     popd
     exit /b 0
@@ -45,7 +53,10 @@ if not defined ISCC_EXE (
 "%ISCC_EXE%" packaging\windows\APIRestDesk.iss
 if errorlevel 1 goto :error
 
-echo Installer completed: dist\installer\APIRestDesk-1.0.3-Setup.exe
+"%PYTHON_EXE%" scripts\prepare_release_sources.py --include-installer
+if errorlevel 1 goto :error
+
+echo Installer, license documents and matching sources completed: dist\release
 popd
 exit /b 0
 

@@ -8,8 +8,18 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QBrush, QColor, QFont, QTextCharFormat, QTextCursor
+from PyQt6.QtCore import Qt, QTimer, QUrl
+from PyQt6.QtGui import (
+    QAction,
+    QBrush,
+    QCloseEvent,
+    QColor,
+    QDesktopServices,
+    QFont,
+    QPixmap,
+    QTextCharFormat,
+    QTextCursor,
+)
 from PyQt6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -40,17 +50,29 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from api_rest_desk.config import APP_NAME, APP_VERSION, DEFAULT_COLLECTION, HISTORY_LIMIT, HTTP_METHODS, AUTHOR
+from api_rest_desk.config import (
+    APP_NAME,
+    APP_VERSION,
+    AUTHOR,
+    DEFAULT_COLLECTION,
+    HISTORY_LIMIT,
+    HTTP_METHODS,
+    UPDATE_CHECK_INTERVAL_MS,
+)
 from api_rest_desk.exceptions import (
     AssertionAPIError,
     CurlParseError,
     HeaderParseError,
     ImportExportError,
+    MissingVariablesError,
     OpenApiParseError,
 )
 from api_rest_desk.i18n import Translator
 from api_rest_desk.models import CallHistory, RestCall, Workflow
-from api_rest_desk.settings import load_settings, save_settings
+from api_rest_desk.settings import active_environment_variables, load_settings, save_settings
+from api_rest_desk.environment_selector import EnvironmentSelector
+from api_rest_desk.resources import app_icon_path
+from api_rest_desk.licenses_dialog import LicensesDialog
 from api_rest_desk.storage import (
     StorageError,
     load_collection,
@@ -68,10 +90,11 @@ from api_rest_desk.widgets import AuthEditor, HeaderEditor, KeyValueEditor
 from api_rest_desk.theme import PALETTE, apply_theme, set_status_badge
 from api_rest_desk.toast import ToastNotification
 from api_rest_desk.settings_dialog import SettingsDialog
-from api_rest_desk.workflow import WorkflowRunner
+from api_rest_desk.workflow import WorkflowRunner, ensure_resolved_variables
 from api_rest_desk.workflow_dialog import WorkflowDialog
-from api_rest_desk.workers import HttpWorker
+from api_rest_desk.workers import HttpWorker, UpdateCheckWorker
 from api_rest_desk.http_client import RestClient
+from api_rest_desk.updates import ReleaseInfo
 
 
 class RestClientWindow(QMainWindow):
@@ -89,6 +112,11 @@ class RestClientWindow(QMainWindow):
         self.pending_call: RestCall | None = None
         self.toast: ToastNotification | None = None
         self._workflow_dialog: WorkflowDialog | None = None
+        self._update_worker: UpdateCheckWorker | None = None
+        self._update_manual = False
+        self._closing_for_update = False
+        self._notified_update_versions: set[str] = set()
+        self._update_dialog: QMessageBox | None = None
 
         self._build_ui()
         self._apply_style()
@@ -103,6 +131,14 @@ class RestClientWindow(QMainWindow):
             self.sidebar_tabs.setCurrentIndex(1)
             self.history_list.setCurrentRow(0)
         self._sync_sidebar_state()
+        self._update_timer = QTimer(self)
+        self._update_timer.setInterval(UPDATE_CHECK_INTERVAL_MS)
+        self._update_timer.timeout.connect(self._check_updates_automatically)
+        self._update_startup_timer = QTimer(self)
+        self._update_startup_timer.setSingleShot(True)
+        self._update_startup_timer.setInterval(1500)
+        self._update_startup_timer.timeout.connect(self._check_updates_automatically)
+        self._configure_update_checks()
 
     def _build_ui(self) -> None:
         root_splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -114,11 +150,20 @@ class RestClientWindow(QMainWindow):
         sidebar_layout.setContentsMargins(14, 14, 14, 14)
         sidebar_layout.setSpacing(12)
 
+        brand_row = QHBoxLayout()
+        brand_row.setSpacing(10)
+        app_logo = QLabel()
+        app_logo.setFixedSize(40, 40)
+        app_logo.setPixmap(QPixmap(app_icon_path()).scaled(
+            40, 40, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation
+        ))
         app_title = QLabel(APP_NAME)
         app_title.setObjectName("AppTitle")
         self.app_subtitle = QLabel()
         self.app_subtitle.setObjectName("MutedLabel")
-        sidebar_layout.addWidget(app_title)
+        brand_row.addWidget(app_logo)
+        brand_row.addWidget(app_title, 1)
+        sidebar_layout.addLayout(brand_row)
         sidebar_layout.addWidget(self.app_subtitle)
 
         self.sidebar_tabs = QTabWidget()
@@ -182,6 +227,9 @@ class RestClientWindow(QMainWindow):
         self.request_title = QLabel()
         self.request_title.setObjectName("SectionTitle")
         request_layout.addWidget(self.request_title)
+        self.environment_selector = EnvironmentSelector(self.translator, self)
+        self.environment_selector.environment_changed.connect(self._refresh_environment_selectors)
+        request_layout.addWidget(self.environment_selector)
 
         name_row = QHBoxLayout()
         self.name_input = QLineEdit()
@@ -206,6 +254,13 @@ class RestClientWindow(QMainWindow):
         self.send_button = QPushButton()
         self.send_button.setObjectName("Primary")
         self.send_button.clicked.connect(self._send_current_call)
+        self.cancel_request_button = QPushButton()
+        self.cancel_request_button.setObjectName("Secondary")
+        self.cancel_request_button.setEnabled(False)
+        self.cancel_request_button.clicked.connect(self._cancel_current_request)
+        self.request_execution_stack = QStackedWidget()
+        self.request_execution_stack.addWidget(self.send_button)
+        self.request_execution_stack.addWidget(self.cancel_request_button)
         request_row.addWidget(self.method_combo)
         request_row.addWidget(self.url_input, 1)
         request_layout.addLayout(request_row)
@@ -248,7 +303,7 @@ class RestClientWindow(QMainWindow):
         request_actions_row.addWidget(self.body_type_combo)
         request_actions_row.addStretch(1)
         request_actions_row.addWidget(self.sync_url_params_button)
-        request_actions_row.addWidget(self.send_button)
+        request_actions_row.addWidget(self.request_execution_stack)
         request_layout.addLayout(request_actions_row)
 
         self.body_stack = QStackedWidget()
@@ -465,6 +520,12 @@ class RestClientWindow(QMainWindow):
         self.about_action = QAction(self)
         self.about_action.triggered.connect(self._show_about_dialog)
         self.about_menu.addAction(self.about_action)
+        self.licenses_action = QAction(self)
+        self.licenses_action.triggered.connect(self._show_licenses)
+        self.about_menu.addAction(self.licenses_action)
+        self.check_updates_action = QAction(self)
+        self.check_updates_action.triggered.connect(lambda: self._check_updates(manual=True))
+        self.about_menu.addAction(self.check_updates_action)
 
     def _apply_style(self) -> None:
         apply_theme(self)
@@ -540,6 +601,11 @@ class RestClientWindow(QMainWindow):
         self.clear_cookies_action.setText(self.t("clear_session_cookies"))
         self.about_menu.setTitle(self.t("about"))
         self.about_action.setText(self.t("about_app"))
+        self.licenses_action.setText(self.t("licenses"))
+        self.check_updates_action.setText(self.t("check_updates"))
+        self.cancel_request_button.setText(self.t("cancel_request"))
+        self.cancel_request_button.setToolTip(self.t("cancel_request_tooltip"))
+        self.environment_selector.refresh()
         self.headers_editor.retranslate_ui(self.translator)
         self.auth_editor.retranslate_ui(self.translator)
         self.params_editor.retranslate_ui(self.translator, self.t("param_name"), self.t("value"))
@@ -728,21 +794,7 @@ class RestClientWindow(QMainWindow):
         if call is None:
             return
 
-        self.name_input.setText(call.name)
-        self.method_combo.setCurrentText(call.method if call.method in HTTP_METHODS else "GET")
-        self.url_input.setText(call.url)
-        self.headers_editor.set_headers(call.headers)
-        self.auth_editor.set_auth(call)
-        self.params_editor.set_values(call.query_params, call.disabled_query_params)
-        self._set_body_type(call.body_type, call.headers)
-        self._set_request_body(call.body, str(self.body_type_combo.currentData() or "raw"))
-        self.timeout_spin.setValue(float(call.timeout))
-        self.follow_redirects_check.setChecked(bool(call.follow_redirects))
-        self.verify_rest_call.setChecked(bool(call.verify))
-        self.retry_count_spin.setValue(int(call.retry_count))
-        self.retry_statuses_input.setText(call.retry_statuses)
-        self.use_session_cookies_check.setChecked(bool(call.use_session_cookies))
-        self.assertions_editor.setPlainText(call.assertions)
+        self._apply_call_to_editor(call)
 
     def _load_selected_history(self) -> None:
         history_item = self._selected_history()
@@ -760,11 +812,12 @@ class RestClientWindow(QMainWindow):
         self.url_input.setText(history_item.url)
         self.headers_editor.set_headers(history_item.request_headers)
         self.auth_editor.set_auth(None)
-        self.params_editor.set_values(history_item.request_query_params)
+        self.params_editor.set_values(history_item.request_query_params, history_item.request_disabled_query_params)
         self._set_body_type(history_item.request_body_type, history_item.request_headers)
         self._set_request_body(history_item.request_body, str(self.body_type_combo.currentData() or "raw"))
         self.timeout_spin.setValue(float(history_item.request_timeout))
         self.follow_redirects_check.setChecked(bool(history_item.request_follow_redirects))
+        self.verify_rest_call.setChecked(history_item.request_verify)
         self.retry_count_spin.setValue(int(history_item.request_retry_count))
         self.retry_statuses_input.setText(history_item.request_retry_statuses)
         self.use_session_cookies_check.setChecked(bool(history_item.request_use_session_cookies))
@@ -942,30 +995,7 @@ class RestClientWindow(QMainWindow):
         if call is None:
             return
 
-        duplicated = RestCall(
-            name=f"{call.name} copia",
-            method=call.method,
-            url=call.url,
-            collection=call.collection,
-            headers=dict(call.headers),
-            query_params=dict(call.query_params),
-            disabled_query_params=list(call.disabled_query_params),
-            body=call.body,
-            body_type=call.body_type,
-            auth_type=call.auth_type,
-            auth_username=call.auth_username,
-            auth_password=call.auth_password,
-            auth_token=call.auth_token,
-            auth_key_name=call.auth_key_name,
-            auth_key_value=call.auth_key_value,
-            auth_key_location=call.auth_key_location,
-            timeout=call.timeout,
-            follow_redirects=call.follow_redirects,
-            retry_count=call.retry_count,
-            retry_statuses=call.retry_statuses,
-            use_session_cookies=call.use_session_cookies,
-            assertions=call.assertions,
-        )
+        duplicated = RestCall.from_dict({**asdict(call), "id": "", "name": f"{call.name} copia"})
         if duplicated.collection not in self.folders:
             self.folders.append(duplicated.collection)
             save_folders(self.folders)
@@ -1048,6 +1078,8 @@ class RestClientWindow(QMainWindow):
             return
         dialog = WorkflowDialog(self.calls, self.translator, self)
         dialog.navigate_to_call.connect(self._navigate_to_call_from_workflow)
+        dialog.environment_changed.connect(self._refresh_environment_selectors)
+        dialog.finished.connect(self._resume_close)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         dialog.destroyed.connect(self._on_workflow_dialog_closed)
         self._workflow_dialog = dialog
@@ -1055,6 +1087,12 @@ class RestClientWindow(QMainWindow):
 
     def _on_workflow_dialog_closed(self) -> None:
         self._workflow_dialog = None
+        self._resume_close()
+
+    def _refresh_environment_selectors(self) -> None:
+        self.environment_selector.refresh()
+        if self._workflow_dialog is not None:
+            self._workflow_dialog.retranslate_ui()
 
     def _navigate_to_call_from_workflow(self, call_id: str) -> None:
         """Bring main window to front and select the call from a workflow step."""
@@ -1078,6 +1116,8 @@ class RestClientWindow(QMainWindow):
         self.retranslate_ui()
         self.statusBar().showMessage(self.t("settings_saved"), 2500)
         self._show_toast(self.t("settings_saved"), "success")
+        self._configure_update_checks()
+        self._refresh_environment_selectors()
 
     def _export_workspace(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
@@ -1142,6 +1182,8 @@ class RestClientWindow(QMainWindow):
             self.translator.set_language(str(load_settings().get("language") or "it"))
             self._apply_style()
             self.retranslate_ui()
+            self._configure_update_checks()
+            self._refresh_environment_selectors()
         if session_cookies is not None:
             self.session_cookies = session_cookies
             save_session_cookies(self.session_cookies)
@@ -1191,8 +1233,142 @@ class RestClientWindow(QMainWindow):
         QMessageBox.about(
             self,
             self.t("about"),
-            f"{APP_NAME} by {AUTHOR}\n{self.t('version')}: {APP_VERSION}",
+            f"{APP_NAME} by {AUTHOR}\n{self.t('version')}: {APP_VERSION}\n\n"
+            f"Copyright (c) 2026 {AUTHOR}\nGNU GPL v3 (GPL-3.0-only)\n\n"
+            f"{self.t('license_summary')}",
         )
+
+    def _show_licenses(self) -> None:
+        LicensesDialog(self.translator, self).exec()
+
+    def _configure_update_checks(self) -> None:
+        enabled = load_settings().get("check_updates_automatically", True) is True
+        if enabled and not self._closing_for_update:
+            if not self._update_timer.isActive():
+                self._update_timer.start()
+                self._update_startup_timer.start()
+        else:
+            self._update_timer.stop()
+            self._update_startup_timer.stop()
+
+    def _check_updates_automatically(self) -> None:
+        if load_settings().get("check_updates_automatically", True) is True:
+            self._check_updates()
+
+    def _check_updates(self, manual: bool = False) -> None:
+        if self._update_worker is not None or self._closing_for_update:
+            return
+        self._update_manual = manual
+        self.check_updates_action.setEnabled(False)
+        if manual:
+            self.statusBar().showMessage(self.t("checking_updates"))
+        worker = UpdateCheckWorker(self)
+        self._update_worker = worker
+        worker.finished_ok.connect(self._update_check_succeeded)
+        worker.failed.connect(self._update_check_failed)
+        worker.finished.connect(self._update_check_finished)
+        worker.start()
+
+    def _update_check_succeeded(self, release: ReleaseInfo | None) -> None:
+        if self._closing_for_update:
+            return
+        if not self._update_manual and load_settings().get("check_updates_automatically", True) is not True:
+            return
+        if release is None or not release.is_newer_than():
+            if self._update_manual:
+                message = (
+                    self.t("update_no_release")
+                    if release is None
+                    else self.t("update_current", version=APP_VERSION)
+                )
+                self.statusBar().showMessage(message, 5000)
+                QMessageBox.information(self, self.t("check_updates"), message)
+            return
+        if not self._update_manual and release.version in self._notified_update_versions:
+            return
+        if self._update_dialog is not None:
+            self._update_dialog.raise_()
+            self._update_dialog.activateWindow()
+            return
+        self._notified_update_versions.add(release.version)
+        self.statusBar().showMessage(self.t("update_available"), 5000)
+        dialog = QMessageBox(self)
+        dialog.setIcon(QMessageBox.Icon.Information)
+        dialog.setWindowTitle(self.t("update_available"))
+        dialog.setTextFormat(Qt.TextFormat.PlainText)
+        dialog.setText(self.t("update_available_message", latest=release.version, current=APP_VERSION))
+        open_button = dialog.addButton(self.t("open_release"), QMessageBox.ButtonRole.AcceptRole)
+        later_button = dialog.addButton(self.t("update_later"), QMessageBox.ButtonRole.RejectRole)
+        dialog.setDefaultButton(later_button)
+        dialog.setEscapeButton(later_button)
+        dialog.buttonClicked.connect(
+            lambda button: self._open_update_release(release) if button is open_button else None
+        )
+        dialog.finished.connect(self._dismiss_update_dialog)
+        self._update_dialog = dialog
+        dialog.open()
+
+    def _open_update_release(self, release: ReleaseInfo) -> None:
+        if not QDesktopServices.openUrl(QUrl(release.url)):
+            self._show_toast(self.t("update_open_failed"), "error")
+
+    def _dismiss_update_dialog(self) -> None:
+        if self._update_dialog is not None:
+            self._update_dialog.deleteLater()
+            self._update_dialog = None
+
+    def _update_check_failed(self, key: str) -> None:
+        if self._closing_for_update:
+            return
+        if self._update_manual:
+            message = self.t(key)
+            self.statusBar().showMessage(message, 5000)
+            QMessageBox.warning(self, self.t("check_updates"), message)
+
+    def _update_check_finished(self) -> None:
+        worker = self._update_worker
+        self._update_worker = None
+        self.check_updates_action.setEnabled(True)
+        if worker is not None:
+            worker.deleteLater()
+        self._resume_close()
+
+    def _resume_close(self) -> None:
+        if not self._closing_for_update:
+            return
+        workflow_worker = self._workflow_dialog.current_worker if self._workflow_dialog is not None else None
+        if self._update_worker is None and self.current_worker is None and workflow_worker is None:
+            self.close()
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        self._update_timer.stop()
+        self._update_startup_timer.stop()
+        workflow_worker = self._workflow_dialog.current_worker if self._workflow_dialog is not None else None
+        if self._update_worker is not None or self.current_worker is not None or workflow_worker is not None:
+            self._closing_for_update = True
+            self._cancel_current_request()
+            if self._workflow_dialog is not None:
+                self._workflow_dialog.close()
+            key = "closing_operations" if self.current_worker is not None or workflow_worker is not None else "update_closing"
+            self.statusBar().showMessage(self.t(key))
+            event.ignore()
+            return
+        if self._workflow_dialog is not None:
+            self._workflow_dialog.close()
+        super().closeEvent(event)
+
+    def shutdown_workers(self) -> None:
+        """Also handle application-level Quit, which can bypass window close events."""
+        self._closing_for_update = True
+        workers = [self.current_worker]
+        if self._workflow_dialog is not None:
+            workers.append(self._workflow_dialog.current_worker)
+        for worker in workers:
+            if worker is not None:
+                worker.cancel()
+        for worker in workers + [self._update_worker]:
+            if worker is not None:
+                worker.wait()
 
     def _show_toast(self, message: str, kind: str = "info") -> None:
         if self.toast is not None:
@@ -1254,8 +1430,11 @@ class RestClientWindow(QMainWindow):
         self._set_request_body(call.body, str(self.body_type_combo.currentData() or "raw"))
         self.timeout_spin.setValue(float(call.timeout))
         self.follow_redirects_check.setChecked(bool(call.follow_redirects))
+        self.verify_rest_call.setChecked(call.verify)
         self.retry_count_spin.setValue(int(call.retry_count))
         self.retry_statuses_input.setText(call.retry_statuses)
+        self.use_session_cookies_check.setChecked(call.use_session_cookies)
+        self.assertions_editor.setPlainText(call.assertions)
 
     @classmethod
     def _call_from_curl(cls, curl_text: str) -> RestCall:
@@ -1567,13 +1746,12 @@ class RestClientWindow(QMainWindow):
 
     @staticmethod
     def _environment_vars() -> dict[str, Any]:
-        environment = load_settings().get("environment")
-        if not isinstance(environment, dict):
-            return {}
-        return {str(key): value for key, value in environment.items()}
+        return active_environment_variables()
 
     def _render_call_for_send(self, call: RestCall) -> RestCall:
-        return WorkflowRunner()._render_call(call, self._environment_vars())
+        rendered = WorkflowRunner()._render_call(call, self._environment_vars())
+        ensure_resolved_variables(rendered)
+        return rendered
 
     def _sync_body_editor(self) -> None:
         body_type = str(self.body_type_combo.currentData() or "raw")
@@ -1758,13 +1936,19 @@ class RestClientWindow(QMainWindow):
                 return
 
     def _send_current_call(self) -> None:
+        if self.current_worker is not None or self._closing_for_update:
+            return
         selected_call = self._selected_call()
         try:
             call = self._read_call_from_ui(selected_call.id if selected_call else None)
         except HeaderParseError as error:
             QMessageBox.warning(self, self.t("invalid_headers_title"), str(error))
             return
-        call = self._render_call_for_send(call)
+        try:
+            call = self._render_call_for_send(call)
+        except MissingVariablesError as error:
+            QMessageBox.warning(self, self.t("missing_variables_title"), str(error))
+            return
 
         if not call.url:
             QMessageBox.warning(self, self.t("missing_url_title"), self.t("missing_url_message"))
@@ -1782,17 +1966,53 @@ class RestClientWindow(QMainWindow):
         self.response_tests.clear()
 
         client = RestClient(session_cookies=self.session_cookies if call.use_session_cookies else None)
-        self.current_worker = HttpWorker(call, client)
+        self.current_worker = HttpWorker(call, client, self)
         self.current_worker.finished_ok.connect(self._show_response)
         self.current_worker.failed.connect(self._show_error)
-        self.current_worker.finished.connect(lambda: self._set_sending_state(False))
+        self.current_worker.cancelled.connect(self._show_request_cancelled)
+        self.current_worker.finished.connect(self._request_worker_finished)
         self.current_worker.start()
 
     def _set_sending_state(self, sending: bool) -> None:
         self.send_button.setDisabled(sending)
         self.send_button.setText(self.t("sending") if sending else self.t("send"))
+        self.send_action.setEnabled(not sending)
+        self.environment_selector.setEnabled(not sending)
+        self.cancel_request_button.setEnabled(sending)
+        self.cancel_request_button.setText(self.t("cancel_request"))
+        self.request_execution_stack.setCurrentWidget(self.cancel_request_button if sending else self.send_button)
+
+    def _cancel_current_request(self) -> None:
+        if self.current_worker is not None:
+            self.current_worker.cancel()
+            self.cancel_request_button.setEnabled(False)
+            self.cancel_request_button.setText(self.t("cancelling"))
+
+    def _show_request_cancelled(self, _result=None) -> None:
+        self.pending_call = None
+        message = self.t("request_cancelled")
+        set_status_badge(self.status_value, message)
+        self.response_body.setPlainText(message)
+        self.response_raw.setPlainText(message)
+        self.response_headers.clear()
+        self.response_json_tree.clear()
+        self.response_tests.clear()
+        self.time_value.setText("-")
+        self.size_value.setText("-")
+        self.statusBar().showMessage(message, 3500)
+
+    def _request_worker_finished(self) -> None:
+        worker = self.current_worker
+        self.current_worker = None
+        self._set_sending_state(False)
+        if worker is not None:
+            worker.deleteLater()
+        self._resume_close()
 
     def _show_response(self, response: dict[str, Any]) -> None:
+        if self.current_worker is not None and self.current_worker.cancel_requested:
+            self._show_request_cancelled()
+            return
         status = int(response["status"])
         reason = response["reason"]
         set_status_badge(self.status_value, f"{status} {reason}", status)
@@ -1827,6 +2047,9 @@ class RestClientWindow(QMainWindow):
             self._show_toast(self.t("http_error_saved"), "warning")
 
     def _show_error(self, error: str) -> None:
+        if self.current_worker is not None and self.current_worker.cancel_requested:
+            self._show_request_cancelled()
+            return
         set_status_badge(self.status_value, self.t("network_error"), network_error=True)
         self.time_value.setText("-")
         self.size_value.setText("-")
@@ -1881,11 +2104,13 @@ class RestClientWindow(QMainWindow):
             method=call.method,
             url=call.url,
             request_headers=dict(call.headers),
-            request_query_params=call.active_query_params(),
+            request_query_params=dict(call.query_params),
+            request_disabled_query_params=list(call.disabled_query_params),
             request_body=call.body,
             request_body_type=call.body_type,
             request_timeout=call.timeout,
             request_follow_redirects=call.follow_redirects,
+            request_verify=call.verify,
             request_retry_count=call.retry_count,
             request_retry_statuses=call.retry_statuses,
             request_use_session_cookies=call.use_session_cookies,

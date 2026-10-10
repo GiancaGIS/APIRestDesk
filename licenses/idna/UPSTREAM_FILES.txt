@@ -1,0 +1,3 @@
+Original files from https://files.pythonhosted.org/packages/cd/63/9496c57188a2ee585e0f1db071d75089a11e98aa86eb99d9d7618fc1edce/idna-3.18.tar.gz
+
+license.md-d8e5ae122146.txt	idna-3.18/LICENSE.md

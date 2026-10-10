@@ -1,0 +1,13 @@
+Original files from https://download.qt.io/official_releases/qt/6.11/6.11.1/submodules/qtsvg-everywhere-src-6.11.1.tar.xz?download
+
+bsd-3-clause.txt-590d1ee08933.txt	qtsvg-everywhere-src-6.11.1/LICENSES/BSD-3-Clause.txt
+gfdl-1.3-no-invariants-only.txt-61b92eb8a9ce.txt	qtsvg-everywhere-src-6.11.1/LICENSES/GFDL-1.3-no-invariants-only.txt
+gpl-2.0-only.txt-767375db7ce9.txt	qtsvg-everywhere-src-6.11.1/LICENSES/GPL-2.0-only.txt
+gpl-3.0-only.txt-fc015d12252f.txt	qtsvg-everywhere-src-6.11.1/LICENSES/GPL-3.0-only.txt
+hpnd-sell-variant.txt-db2ff7552791.txt	qtsvg-everywhere-src-6.11.1/LICENSES/HPND-sell-variant.txt
+lgpl-3.0-only.txt-4cfee9e8ae6d.txt	qtsvg-everywhere-src-6.11.1/LICENSES/LGPL-3.0-only.txt
+license.txt-84c40081a04a.txt	qtsvg-everywhere-src-6.11.1/tests/baseline/data/svg_12_testsuite/LICENSE.txt
+license.xsvg.txt-aee30455c0d8.txt	qtsvg-everywhere-src-6.11.1/src/svg/LICENSE.XSVG.txt
+licenseref-qt-commercial.txt-08892d205697.txt	qtsvg-everywhere-src-6.11.1/LICENSES/LicenseRef-Qt-Commercial.txt
+licenserule.json-6da0a38ff104.txt	qtsvg-everywhere-src-6.11.1/licenseRule.json
+qt_attribution.json-7e4a744f006a.txt	qtsvg-everywhere-src-6.11.1/src/svg/qt_attribution.json

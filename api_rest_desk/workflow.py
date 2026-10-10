@@ -1,16 +1,18 @@
 from __future__ import annotations
 
+import asyncio
 import copy
 import difflib
 import json
 import re
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable, Generator
+from urllib.parse import parse_qsl, urlencode
 
-from api_rest_desk.exceptions import ExtractionError, ExtractorParseError
+from api_rest_desk.exceptions import ExtractionError, ExtractorParseError, MissingVariablesError
 from api_rest_desk.http_client import RestClient
 from api_rest_desk.models import HttpResponseData, RestCall, Workflow
-from api_rest_desk.settings import load_settings
+from api_rest_desk.settings import active_environment_variables
 
 
 TEMPLATE_PATTERN = re.compile(r"\{\{\s*([A-Za-z_][A-Za-z0-9_.-]*)\s*\}\}")
@@ -18,6 +20,29 @@ PATH_TOKEN_PATTERN = re.compile(r"([A-Za-z_][A-Za-z0-9_-]*)(?:\[(\d+)])?")
 CAMEL_BOUNDARY_PATTERN = re.compile(r"([a-z0-9])([A-Z])")
 NAME_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9]+")
 AUTO_PARAM_SCORE_THRESHOLD = 0.78
+
+
+def ensure_resolved_variables(call: RestCall) -> None:
+    """Validate only the fields that will actually be sent to the server."""
+    fields = [call.url]
+    if call.method not in {"GET", "DELETE"}:
+        if call.body_type == "form":
+            for key, value in parse_qsl(call.body, keep_blank_values=True):
+                fields.extend((key, value))
+        else:
+            fields.append(call.body)
+    for mapping in (call.headers, call.active_query_params()):
+        fields.extend(mapping.keys())
+        fields.extend(mapping.values())
+    if call.auth_type == "basic":
+        fields.extend((call.auth_username, call.auth_password))
+    elif call.auth_type == "bearer":
+        fields.append(call.auth_token)
+    elif call.auth_type == "api_key":
+        fields.extend((call.auth_key_name, call.auth_key_value))
+    missing = sorted({match.group(1) for text in fields for match in TEMPLATE_PATTERN.finditer(str(text))})
+    if missing:
+        raise MissingVariablesError("missing_variables", variables=", ".join(missing))
 
 
 @dataclass(frozen=True)
@@ -59,8 +84,16 @@ class WorkflowRunner:
     from JSON responses between steps.
     """
 
-    def __init__(self, client: RestClient | None = None) -> None:
+    def __init__(
+        self,
+        client: RestClient | None = None,
+        environment: dict[str, Any] | None = None,
+        progress: Callable[[int, int, str], None] | None = None,
+    ) -> None:
         self.client = client or RestClient()
+        self.environment = copy.deepcopy(environment) if environment is not None else None
+        self.progress = progress
+        self.last_result = WorkflowRunResult(variables={}, steps=[])
 
     def run(self, workflow: Workflow, calls: list[RestCall]) -> WorkflowRunResult:
         """Execute all steps of *workflow* in order.
@@ -78,10 +111,41 @@ class WorkflowRunner:
             A :class:`WorkflowRunResult` with per-step outcomes and the
             accumulated variable dictionary.
         """
-        variables: dict[str, Any] = self._environment_variables()
+        steps = self._run_steps(workflow, calls)
+        response = None
+        try:
+            while True:
+                try:
+                    call = steps.send(response)
+                except StopIteration as completed:
+                    return completed.value
+                response = self.client.send(call)
+        finally:
+            steps.close()
+
+    async def run_async(self, workflow: Workflow, calls: list[RestCall]) -> WorkflowRunResult:
+        """Execute the same workflow with cancellable network I/O."""
+        steps = self._run_steps(workflow, calls)
+        response = None
+        try:
+            while True:
+                await asyncio.sleep(0)
+                try:
+                    call = steps.send(response)
+                except StopIteration as completed:
+                    return completed.value
+                response = await self.client.send_async(call)
+        finally:
+            steps.close()
+
+    def _run_steps(
+        self, workflow: Workflow, calls: list[RestCall]
+    ) -> Generator[RestCall, HttpResponseData | None, WorkflowRunResult]:
+        variables = copy.deepcopy(self.environment) if self.environment is not None else self._environment_variables()
         auto_candidates: list[AutoParamCandidate] = []
         results: list[WorkflowStepResult] = []
         calls_by_id = {call.id: call for call in calls}
+        self.last_result = WorkflowRunResult(variables=variables, steps=results)
 
         for index, step in enumerate(workflow.steps, start=1):
             source_call = calls_by_id.get(step.call_id)
@@ -102,7 +166,10 @@ class WorkflowRunner:
                 auto_candidates,
                 workflow.auto_map_params,
             )
-            response = self.client.send(rendered_call)
+            ensure_resolved_variables(rendered_call)
+            if self.progress is not None:
+                self.progress(index, len(workflow.steps), step.name or source_call.name)
+            response = yield rendered_call
             try:
                 extracted = self._extract_variables(response, step.extractors)
             except (KeyError, TypeError, ValueError) as error:
@@ -155,10 +222,7 @@ class WorkflowRunner:
     @staticmethod
     def _environment_variables() -> dict[str, Any]:
         """Load user-defined environment variables from application settings."""
-        environment = load_settings().get("environment")
-        if not isinstance(environment, dict):
-            return {}
-        return {str(key): value for key, value in environment.items()}
+        return active_environment_variables()
 
     def _prepare_call(
         self,
@@ -193,7 +257,13 @@ class WorkflowRunner:
         candidates = auto_candidates or []
         rendered = copy.deepcopy(call)
         rendered.url = self._render_text(rendered.url, variables, candidates)
-        rendered.body = self._render_text(rendered.body, variables, candidates)
+        if rendered.body_type == "form":
+            rendered.body = urlencode([
+                (self._render_text(key, variables, candidates), self._render_text(value, variables, candidates))
+                for key, value in parse_qsl(rendered.body, keep_blank_values=True)
+            ])
+        else:
+            rendered.body = self._render_text(rendered.body, variables, candidates)
         rendered.auth_username = self._render_text(rendered.auth_username, variables, candidates)
         rendered.auth_password = self._render_text(rendered.auth_password, variables, candidates)
         rendered.auth_token = self._render_text(rendered.auth_token, variables, candidates)
@@ -228,7 +298,9 @@ class WorkflowRunner:
                 value = variables[variable_name]
             else:
                 candidate = WorkflowRunner._best_auto_candidate(variable_name, auto_candidates or [])
-                value = candidate.value if candidate is not None else ""
+                if candidate is None:
+                    return match.group(0)
+                value = candidate.value
             if isinstance(value, str):
                 return value
             return json.dumps(value, ensure_ascii=False)

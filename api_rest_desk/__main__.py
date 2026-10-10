@@ -18,6 +18,7 @@ def main() -> int:
     app.setWindowIcon(icon)
     window = RestClientWindow()
     window.setWindowIcon(icon)
+    app.aboutToQuit.connect(window.shutdown_workers)
     window.show()
     return app.exec()
 

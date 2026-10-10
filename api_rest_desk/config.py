@@ -6,11 +6,13 @@ from pathlib import Path
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-APP_NAME = "APIRestDesk 🚀"
+APP_NAME = "APIRestDesk"
 APP_FOLDER_NAME = "APIRestDesk"
 APP_BUNDLE_ID = "com.giancagis.apirestdesk"
 AUTHOR = "GiancaGIS"
-APP_VERSION = "1.0.4"
+APP_VERSION = "1.0.5"
+GITHUB_REPOSITORY = "GiancaGIS/APIRestDesk"
+UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000
 
 
 def _default_data_dir() -> Path:

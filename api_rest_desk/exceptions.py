@@ -4,6 +4,7 @@ from __future__ import annotations
 ERROR_MESSAGES: dict[str, dict[str, str]] = {
     "it": {
         "no_http_response": "Nessuna risposta HTTP ricevuta.",
+        "missing_variables": "Variabili non definite nell'ambiente attivo: {variables}",
         "curl_no_url": "cURL senza URL.",
         "curl_option_no_value": "Opzione cURL senza valore: {option}",
         "curl_parse_failed": "cURL non valido: {detail}",
@@ -26,6 +27,7 @@ ERROR_MESSAGES: dict[str, dict[str, str]] = {
     },
     "en": {
         "no_http_response": "No HTTP response received.",
+        "missing_variables": "Variables not defined in the active environment: {variables}",
         "curl_no_url": "cURL without URL.",
         "curl_option_no_value": "cURL option without value: {option}",
         "curl_parse_failed": "Invalid cURL: {detail}",
@@ -103,6 +105,10 @@ class HttpClientError(RestDeskError):
 
 class NoResponseError(HttpClientError):
     """No HTTP response was received after all retry attempts."""
+
+
+class MissingVariablesError(HttpClientError):
+    """A request still contains unresolved environment placeholders."""
 
 
 # ── cURL ─────────────────────────────────────────────────────

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from typing import Any
@@ -54,13 +55,27 @@ class RestClient:
             NoResponseError: If no response is received after all attempts.
             httpx.HTTPError: On transport-level failures (DNS, timeout, etc.).
         """
+        arguments = self._request_arguments(call)
+        attempts = max(1, int(call.retry_count) + 1)
+        retry_statuses = self._parse_retry_statuses(call.retry_statuses)
+        timeout = max(0.1, float(call.timeout or self.timeout))
+        started = time.perf_counter()
+        cookies = self.session_cookies if call.use_session_cookies else None
+        with httpx.Client(timeout=timeout, follow_redirects=call.follow_redirects, cookies=cookies, verify=call.verify) as client:
+            response = None
+            for attempt in range(attempts):
+                response = client.request(**arguments)
+                if attempt == attempts - 1 or response.status_code not in retry_statuses:
+                    break
+                time.sleep(min(0.25 * (attempt + 1), 1.0))
+            return self._response_data(response, started, dict(client.cookies))
+
+    def _request_arguments(self, call: RestCall) -> dict[str, Any]:
+        """Prepare identical request options for synchronous and async execution."""
         headers = dict(call.headers)
         headers.setdefault("User-Agent", f"PyQt {APP_NAME.split(' ')[0]}/0.1")
         params = call.active_query_params()
         auth: tuple[str, str] | None = None
-        retry_statuses = self._parse_retry_statuses(call.retry_statuses)
-        attempts = max(1, int(call.retry_count) + 1)
-        timeout = max(0.1, float(call.timeout or self.timeout))
 
         if call.auth_type == "basic" and (call.auth_username or call.auth_password):
             auth = (call.auth_username, call.auth_password)
@@ -101,24 +116,38 @@ class RestClient:
             params = {}
             headers.setdefault(self._label_content_type, self._content_type['urlencoded'])
 
-        started = time.perf_counter()
+        return {
+            "method": call.method,
+            "url": call.url,
+            "headers": headers,
+            "params": params or None,
+            "content": content,
+            "data": form_data,
+            "json": json_data,
+            "auth": auth,
+        }
+
+    async def send_async(self, call: RestCall) -> HttpResponseData:
+        """Send a request whose connection, response and retry waits can be cancelled."""
+        arguments = self._request_arguments(call)
+        attempts = max(1, int(call.retry_count) + 1)
+        retry_statuses = self._parse_retry_statuses(call.retry_statuses)
+        timeout = max(0.1, float(call.timeout or self.timeout))
         cookies = self.session_cookies if call.use_session_cookies else None
-        with httpx.Client(timeout=timeout, follow_redirects=call.follow_redirects, cookies=cookies, verify=call.verify) as client:
-            response: httpx.Response | None = None
+        started = time.perf_counter()
+        async with httpx.AsyncClient(
+            timeout=timeout, follow_redirects=call.follow_redirects, cookies=cookies, verify=call.verify
+        ) as client:
+            response = None
             for attempt in range(attempts):
-                response = client.request(
-                    method=call.method,
-                    url=call.url,
-                    headers=headers,
-                    params=params or None,
-                    content=content,
-                    data=form_data,
-                    json=json_data,
-                    auth=auth,
-                )
+                response = await client.request(**arguments)
                 if attempt == attempts - 1 or response.status_code not in retry_statuses:
                     break
-                time.sleep(min(0.25 * (attempt + 1), 1.0))
+                await asyncio.sleep(min(0.25 * (attempt + 1), 1.0))
+            return self._response_data(response, started, dict(client.cookies))
+
+    @staticmethod
+    def _response_data(response: httpx.Response | None, started: float, cookies: dict[str, str]) -> HttpResponseData:
         elapsed_ms = round((time.perf_counter() - started) * 1000, 1)
         if response is None:
             raise NoResponseError("no_http_response")
@@ -130,7 +159,7 @@ class RestClient:
             body=response.text,
             elapsed_ms=elapsed_ms,
             size_bytes=len(response.content),
-            cookies=dict(client.cookies),
+            cookies=cookies,
         )
 
     @staticmethod

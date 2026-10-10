@@ -1,0 +1,3 @@
+Original files from https://github.com/zlib-ng/zlib-ng/archive/refs/tags/2.2.4.tar.gz
+
+license.md-a94df428e2e3.txt	zlib-ng-2.2.4/LICENSE.md

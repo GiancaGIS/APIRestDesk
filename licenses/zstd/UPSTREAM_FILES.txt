@@ -1,0 +1,5 @@
+Original files from https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz
+
+copying-d2be5713409b.txt	zstd-1.5.7/COPYING
+license-23173bc660cc.txt	zstd-1.5.7/LICENSE
+license-d2f8b8eba7cc.txt	zstd-1.5.7/build/LICENSE

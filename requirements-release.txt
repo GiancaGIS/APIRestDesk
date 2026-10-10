@@ -1,0 +1,17 @@
+# Runtime dependencies used to build releases; the application still supports Python >=3.11.
+PyQt6==6.11.0
+PyQt6-Qt6==6.11.1
+PyQt6-sip==13.11.1
+httpx==0.28.1
+httpcore==1.0.9
+anyio==4.14.2
+h11==0.16.0
+idna==3.18
+certifi==2026.6.17
+typing_extensions==4.15.0; python_version < "3.13"
+pyinstaller==6.21.0
+pyinstaller-hooks-contrib==2026.6
+altgraph==0.17.5
+packaging==26.2
+pefile==2024.8.26; sys_platform == "win32"
+pywin32-ctypes==0.2.3; sys_platform == "win32"

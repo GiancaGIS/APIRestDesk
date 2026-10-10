@@ -1,0 +1,150 @@
+# Source archives retained for the reviewed local build.
+# SHA-256 comes from PyPI/Qt for those packages; other native digests record HTTPS downloads.
+
+[[sources]]
+name = "PyQt6"
+version = "6.11.0"
+filename = "pyqt6-6.11.0.tar.gz"
+url = "https://files.pythonhosted.org/packages/8b/47/b25c13eca5bebc6505394d0223e46d7ebf0c57dcac2ed908d7d19b18ab6b/pyqt6-6.11.0.tar.gz"
+sha256 = "45dd60aa69976de1918b5ced6b4e7b6a25abd2a919ecef5fd5826ecc76718889"
+license = "GPL-3.0-only"
+
+[[sources]]
+name = "PyQt6-sip"
+version = "13.11.1"
+filename = "pyqt6_sip-13.11.1.tar.gz"
+url = "https://files.pythonhosted.org/packages/90/24/a753e1af94b9ae5b2da63d4598457308da3cdbf0838c959381db086ccc86/pyqt6_sip-13.11.1.tar.gz"
+sha256 = "869c5b48afe38e55b1ee0dd72182b0886e968cc509b98023ff50010b013ce1be"
+license = "BSD-2-Clause"
+
+[[sources]]
+name = "httpx"
+version = "0.28.1"
+filename = "httpx-0.28.1.tar.gz"
+url = "https://files.pythonhosted.org/packages/b1/df/48c586a5fe32a0f01324ee087459e112ebb7224f646c0b5023f5e79e9956/httpx-0.28.1.tar.gz"
+sha256 = "75e98c5f16b0f35b567856f597f06ff2270a374470a5c2392242528e3e3e42fc"
+license = "BSD-3-Clause"
+
+[[sources]]
+name = "httpcore"
+version = "1.0.9"
+filename = "httpcore-1.0.9.tar.gz"
+url = "https://files.pythonhosted.org/packages/06/94/82699a10bca87a5556c9c59b5963f2d039dbd239f25bc2a63907a05a14cb/httpcore-1.0.9.tar.gz"
+sha256 = "6e34463af53fd2ab5d807f399a9b45ea31c3dfa2276f15a2c3f00afff6e176e8"
+license = "BSD-3-Clause"
+
+[[sources]]
+name = "anyio"
+version = "4.14.2"
+filename = "anyio-4.14.2.tar.gz"
+url = "https://files.pythonhosted.org/packages/61/cc/a381afa6efea9f496eff839d4a6a1aed3bfafc7b3ab4b0d1b243a12573dd/anyio-4.14.2.tar.gz"
+sha256 = "cfa139f3ed1a23ee8f88a145ddb5ac7605b8bbfd8592baacd7ce3d8bb4313c7f"
+license = "MIT"
+
+[[sources]]
+name = "h11"
+version = "0.16.0"
+filename = "h11-0.16.0.tar.gz"
+url = "https://files.pythonhosted.org/packages/01/ee/02a2c011bdab74c6fb3c75474d40b3052059d95df7e73351460c8588d963/h11-0.16.0.tar.gz"
+sha256 = "4e35b956cf45792e4caa5885e69fba00bdbc6ffafbfa020300e549b208ee5ff1"
+license = "MIT"
+
+[[sources]]
+name = "idna"
+version = "3.18"
+filename = "idna-3.18.tar.gz"
+url = "https://files.pythonhosted.org/packages/cd/63/9496c57188a2ee585e0f1db071d75089a11e98aa86eb99d9d7618fc1edce/idna-3.18.tar.gz"
+sha256 = "ffb385a7e039654cef1ab9ef32c6fafe283c0c0467bba1d9029738ce4a14a848"
+license = "BSD-3-Clause"
+
+[[sources]]
+name = "certifi"
+version = "2026.6.17"
+filename = "certifi-2026.6.17.tar.gz"
+url = "https://files.pythonhosted.org/packages/c9/c7/424b75da314c1045981bd9777432fad05a9e0c69daa4ed7e308bbaffe405/certifi-2026.6.17.tar.gz"
+sha256 = "024c88eeec92ca068db80f02b8b07c9cef7b9fe261d1d535abfd5abd6f6af432"
+license = "MPL-2.0"
+
+[[sources]]
+name = "pyinstaller"
+version = "6.21.0"
+filename = "pyinstaller-6.21.0.tar.gz"
+url = "https://files.pythonhosted.org/packages/d5/4d/ec706c3fcf39e26888c35b39615ff4d5865d184069666c47492cff1fbe50/pyinstaller-6.21.0.tar.gz"
+sha256 = "bb9fab705983e393a2d1cac77d6972513057ad800215fd861dc15ff5272e98fd"
+license = "GPLv2-or-later with a special exception which allows to use PyInstaller to build and distribute non-free programs (including commercial ones)"
+
+[[sources]]
+name = "qtbase"
+version = "6.11.1"
+filename = "qtbase-everywhere-src-6.11.1.tar.xz"
+url = "https://download.qt.io/official_releases/qt/6.11/6.11.1/submodules/qtbase-everywhere-src-6.11.1.tar.xz?download"
+sha256 = "d9594a31228aa23ad6b531719a29b45f0f3989fe6c136d45767ea179f233c1ac"
+license = "See Qt and third-party license files"
+
+[[sources]]
+name = "qtsvg"
+version = "6.11.1"
+filename = "qtsvg-everywhere-src-6.11.1.tar.xz"
+url = "https://download.qt.io/official_releases/qt/6.11/6.11.1/submodules/qtsvg-everywhere-src-6.11.1.tar.xz?download"
+sha256 = "7f3cf02f4824bf03c2c5859ea6db173bf1482a1daf24e6cdf7bc78cfa26a8a94"
+license = "See Qt and third-party license files"
+
+[[sources]]
+name = "qtimageformats"
+version = "6.11.1"
+filename = "qtimageformats-everywhere-src-6.11.1.tar.xz"
+url = "https://download.qt.io/official_releases/qt/6.11/6.11.1/submodules/qtimageformats-everywhere-src-6.11.1.tar.xz?download"
+sha256 = "b2bf6c6845ac175ed7f819145483ba4676f617aaa6a5012c8efee63c8bbac413"
+license = "See Qt and third-party license files"
+
+[[sources]]
+name = "CPython"
+version = "3.14.5"
+filename = "Python-3.14.5.tar.xz"
+url = "https://www.python.org/ftp/python/3.14.5/Python-3.14.5.tar.xz"
+license = "PSF-2.0 and incorporated software licenses"
+sha256 = "7e32597b99e5d9a39abed35de4693fa169df3e5850d4c334337ffd6a19a36db6"
+
+[[sources]]
+name = "OpenSSL"
+version = "3.0.20"
+filename = "openssl-3.0.20.tar.gz"
+url = "https://github.com/openssl/openssl/releases/download/openssl-3.0.20/openssl-3.0.20.tar.gz"
+license = "Apache-2.0"
+sha256 = "c80a01dfc70ece4dc21168932c37739042d404d46ccc81a5986dd75314ecda6f"
+
+[[sources]]
+name = "zstd"
+version = "1.5.7"
+filename = "zstd-1.5.7.tar.gz"
+url = "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz"
+license = "BSD-3-Clause OR GPL-2.0-only; use the BSD option for the library"
+version_provenance = "Windows CPython PCbuild/python.props; review against the actual runtime when changing interpreter"
+sha256 = "eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3"
+
+[[sources]]
+name = "zlib-ng"
+version = "2.2.4"
+filename = "zlib-ng-2.2.4.tar.gz"
+url = "https://github.com/zlib-ng/zlib-ng/archive/refs/tags/2.2.4.tar.gz"
+license = "Zlib and incorporated software notices"
+version_provenance = "Windows CPython PCbuild/python.props; review against the actual runtime when changing interpreter"
+sha256 = "a73343c3093e5cdc50d9377997c3815b878fd110bf6511c2c7759f2afb90f5a3"
+
+[[sources]]
+name = "xz"
+version = "5.2.5"
+filename = "xz-5.2.5.tar.gz"
+url = "https://github.com/tukaani-project/xz/archive/refs/tags/v5.2.5.tar.gz"
+license = "Public-domain liblzma and component-specific licenses; see COPYING"
+version_provenance = "Windows CPython PCbuild/python.props; review against the actual runtime when changing interpreter"
+sha256 = "0d2b89629f13dd1a0602810529327195eff5f62a0142ccd65b903bc16a4ac78a"
+
+[[sources]]
+name = "libffi"
+version = "3.4.4"
+filename = "libffi-3.4.4.tar.gz"
+url = "https://github.com/libffi/libffi/releases/download/v3.4.4/libffi-3.4.4.tar.gz"
+license = "MIT"
+version_provenance = "Windows CPython PCbuild/python.props; review against the actual runtime when changing interpreter"
+sha256 = "d66c56ad259a82cf2a9dfc408b32bf5da52371500b84745f7fb8b645712df676"

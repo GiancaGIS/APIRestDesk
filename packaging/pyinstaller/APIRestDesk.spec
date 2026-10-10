@@ -2,6 +2,7 @@
 
 from pathlib import Path
 import sys
+import subprocess
 
 from api_rest_desk.config import APP_BUNDLE_ID, APP_FOLDER_NAME, APP_NAME, APP_VERSION
 
@@ -9,13 +10,17 @@ from api_rest_desk.config import APP_BUNDLE_ID, APP_FOLDER_NAME, APP_NAME, APP_V
 ROOT_DIR = Path(SPECPATH).parents[1]
 ASSETS_DIR = ROOT_DIR / "api_rest_desk" / "assets"
 ICON_FILE = ASSETS_DIR / ("app_icon.icns" if sys.platform == "darwin" else "app_icon.ico")
+subprocess.run([sys.executable, str(ROOT_DIR / "scripts" / "prepare_licenses.py"), "--check"], check=True)
 
 
 a = Analysis(
     [str(ROOT_DIR / "launch_api_rest_desk.py")],
     pathex=[str(ROOT_DIR)],
     binaries=[],
-    datas=[(str(ASSETS_DIR / "app_icon.png"), "api_rest_desk/assets")],
+    datas=[
+        (str(ASSETS_DIR / "app_icon.png"), "api_rest_desk/assets"),
+        (str(ROOT_DIR / "api_rest_desk" / "legal"), "api_rest_desk/legal"),
+    ],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -23,6 +28,12 @@ a = Analysis(
     excludes=[],
     noarchive=False,
 )
+# Widgets use neither PDF rendering nor the optional software OpenGL fallback.
+# Excluding these avoids redistributing unrelated native components and notices.
+a.binaries = [entry for entry in a.binaries if not any(
+    name in entry[0].lower().replace("\\", "/")
+    for name in ("qpdf", "qtpdf", "qt6pdf", "opengl32sw")
+)]
 pyz = PYZ(a.pure)
 
 if sys.platform == "darwin":

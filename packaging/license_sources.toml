@@ -1,0 +1,59 @@
+# Runtime versions reviewed for this release. Update the legal bundle when changing them.
+[build]
+windows_python = "3.14.5"
+
+[packages]
+PyQt6 = "6.11.0"
+PyQt6-sip = "13.11.1"
+httpx = "0.28.1"
+httpcore = "1.0.9"
+anyio = "4.14.2"
+h11 = "0.16.0"
+idna = "3.18"
+certifi = "2026.6.17"
+pyinstaller = "6.21.0"
+
+[qt]
+version = "6.11.1"
+
+[[qt.modules]]
+name = "qtbase"
+sha256 = "d9594a31228aa23ad6b531719a29b45f0f3989fe6c136d45767ea179f233c1ac"
+
+[[qt.modules]]
+name = "qtsvg"
+sha256 = "7f3cf02f4824bf03c2c5859ea6db173bf1482a1daf24e6cdf7bc78cfa26a8a94"
+
+[[qt.modules]]
+name = "qtimageformats"
+sha256 = "b2bf6c6845ac175ed7f819145483ba4676f617aaa6a5012c8efee63c8bbac413"
+
+# Windows CPython external versions from PCbuild/python.props in Python 3.14.5.
+# zstd and the zlib-ng runtime family were additionally observed in the running interpreter.
+[[windows_native]]
+name = "zstd"
+version = "1.5.7"
+filename = "zstd-1.5.7.tar.gz"
+url = "https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz"
+license = "BSD-3-Clause OR GPL-2.0-only; use the BSD option for the library"
+
+[[windows_native]]
+name = "zlib-ng"
+version = "2.2.4"
+filename = "zlib-ng-2.2.4.tar.gz"
+url = "https://github.com/zlib-ng/zlib-ng/archive/refs/tags/2.2.4.tar.gz"
+license = "Zlib and incorporated software notices"
+
+[[windows_native]]
+name = "xz"
+version = "5.2.5"
+filename = "xz-5.2.5.tar.gz"
+url = "https://github.com/tukaani-project/xz/archive/refs/tags/v5.2.5.tar.gz"
+license = "Public-domain liblzma and component-specific licenses; see COPYING"
+
+[[windows_native]]
+name = "libffi"
+version = "3.4.4"
+filename = "libffi-3.4.4.tar.gz"
+url = "https://github.com/libffi/libffi/releases/download/v3.4.4/libffi-3.4.4.tar.gz"
+license = "MIT"

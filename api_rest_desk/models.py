@@ -65,7 +65,7 @@ class RestCall:
             auth_key_name=str(data.get("auth_key_name") or ""),
             auth_key_value=str(data.get("auth_key_value") or ""),
             auth_key_location=str(data.get("auth_key_location") or "header"),
-            verify=bool(data.get("verify")),
+            verify=data.get("verify") if isinstance(data.get("verify"), bool) else True,
             timeout=float(data.get("timeout") if isinstance(data.get("timeout"), (int, float)) else 30.0),
             follow_redirects=bool(data.get("follow_redirects", True)),
             retry_count=int(data.get("retry_count") if isinstance(data.get("retry_count"), int) else 0),
@@ -107,10 +107,12 @@ class CallHistory:
     url: str
     request_headers: dict[str, str] = field(default_factory=dict)
     request_query_params: dict[str, str] = field(default_factory=dict)
+    request_disabled_query_params: list[str] = field(default_factory=list)
     request_body: str = ""
     request_body_type: str = "raw"
     request_timeout: float = 30.0
     request_follow_redirects: bool = True
+    request_verify: bool = True
     request_retry_count: int = 0
     request_retry_statuses: str = "429,500,502,503,504"
     request_use_session_cookies: bool = False
@@ -137,12 +139,16 @@ class CallHistory:
             url=str(data.get("url") or ""),
             request_headers=dict(data.get("request_headers") or {}),
             request_query_params=dict(data.get("request_query_params") or {}),
+            request_disabled_query_params=[
+                str(name) for name in data.get("request_disabled_query_params", [])
+            ] if isinstance(data.get("request_disabled_query_params", []), list) else [],
             request_body=str(data.get("request_body") or ""),
             request_body_type=str(data.get("request_body_type") or "raw"),
             request_timeout=float(
                 data.get("request_timeout") if isinstance(data.get("request_timeout"), (int, float)) else 30.0
             ),
             request_follow_redirects=bool(data.get("request_follow_redirects", True)),
+            request_verify=data.get("request_verify") if isinstance(data.get("request_verify"), bool) else True,
             request_retry_count=int(data.get("request_retry_count") if isinstance(data.get("request_retry_count"), int) else 0),
             request_retry_statuses=str(data.get("request_retry_statuses") or "429,500,502,503,504"),
             request_use_session_cookies=bool(data.get("request_use_session_cookies", False)),
